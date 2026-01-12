@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks'
+import { Hexagon, Loader2 } from 'lucide-react'
 
 export function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -33,7 +34,7 @@ export function AuthPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-logo">
-          <span className="logo-icon">◈</span>
+          <Hexagon className="logo-icon" size={32} />
           <h1>R-O-AI</h1>
         </div>
 
@@ -102,7 +103,7 @@ export function AuthPage() {
             disabled={isLoading}
           >
             {isLoading ? (
-              <span className="loading-spinner" />
+              <Loader2 className="spinning" size={18} />
             ) : mode === 'login' ? (
               'Sign In'
             ) : (

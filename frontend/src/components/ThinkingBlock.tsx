@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Code, Database, Search, CheckCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, Code, Database, Search, CheckCircle, ArrowRight } from 'lucide-react'
 import type { ToolCall } from '../types'
 
 interface ThinkingBlockProps {
@@ -41,7 +41,7 @@ export function ThinkingBlock({ toolCalls }: ThinkingBlockProps) {
       >
         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <span className="thinking-title">
-          🧠 Thinking ({toolCalls.length} operation{toolCalls.length !== 1 ? 's' : ''})
+          Thinking ({toolCalls.length} operation{toolCalls.length !== 1 ? 's' : ''})
         </span>
         <CheckCircle size={14} className="thinking-done" />
       </button>
@@ -72,12 +72,13 @@ export function ThinkingBlock({ toolCalls }: ThinkingBlockProps) {
                 )}
                 {call.query && (
                   <div className="tool-call-code">
-                    <code>🔍 {call.query}</code>
+                    <Search size={12} />
+                    <code>{call.query}</code>
                   </div>
                 )}
                 
                 <div className="tool-call-result">
-                  <span className="result-label">→</span>
+                  <ArrowRight size={12} className="result-label" />
                   <span className="result-value">{formatResult(call.result)}</span>
                 </div>
               </div>

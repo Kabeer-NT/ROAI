@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, User, Hexagon } from 'lucide-react'
 import type { Message } from '../types'
 import { ThinkingBlock } from './ThinkingBlock'
 
@@ -28,7 +28,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
   return (
     <div className={`message ${message.role}`}>
       <div className="message-avatar">
-        {message.role === 'user' ? '◉' : '◈'}
+        {message.role === 'user' ? <User size={18} /> : <Hexagon size={18} />}
       </div>
       <div className="message-body">
         <div className="message-header">
@@ -78,7 +78,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
 export function LoadingMessage() {
   return (
     <div className="message assistant">
-      <div className="message-avatar">◈</div>
+      <div className="message-avatar">
+        <Hexagon size={18} className="spinning" />
+      </div>
       <div className="message-body">
         <div className="message-header">
           <span className="message-sender">R-O-AI</span>

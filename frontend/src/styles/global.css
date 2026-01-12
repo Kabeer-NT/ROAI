@@ -1853,3 +1853,206 @@ body {
   font-style: italic;
   font-size: 13px;
 }
+
+/* Add this to your global.css */
+
+/* Lucide icon animations */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Logo icon styling */
+.logo-icon {
+  color: #22c55e;
+}
+
+/* Status icons */
+.status-icon.connected {
+  color: #22c55e;
+}
+
+.status-icon.error {
+  color: #ef4444;
+}
+
+/* Welcome icon */
+.welcome-icon {
+  color: #22c55e;
+  margin-bottom: 16px;
+}
+
+/* Message avatars with icons */
+.message-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  flex-shrink: 0;
+}
+
+.message.assistant .message-avatar {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #16a34a;
+}
+
+.message.user .message-avatar {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  color: #4f46e5;
+}
+
+/* File card expand icon */
+.file-card-expand {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.file-card-header:hover .file-card-expand {
+  color: #6b7280;
+}
+
+/* Drop zone icon */
+.drop-zone-icon {
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.drop-zone:hover .drop-zone-icon {
+  color: #22c55e;
+}
+
+.drop-zone.dragging .drop-zone-icon {
+  color: #22c55e;
+}
+
+/* Hint buttons with icons */
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hint svg {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* Tool call result arrow */
+.result-label {
+  color: #22c55e;
+  flex-shrink: 0;
+}
+
+/* Sidebar toggle */
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* File remove button */
+.file-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.file-card-header:hover .file-remove {
+  opacity: 1;
+}
+
+.file-remove:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* Input buttons */
+.attach-btn,
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.attach-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.send-btn {
+  background: #22c55e;
+  color: white;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.send-btn:disabled {
+  background: #e5e7eb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Logout button */
+.logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.logout-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* Reloading icon */
+.reloading-icon {
+  color: #22c55e;
+  margin-left: 8px;
+}

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Paperclip, Send } from 'lucide-react'
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -67,7 +68,7 @@ export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, plac
             onChange={handleFileChange}
             hidden
           />
-          <span>+</span>
+          <Paperclip size={18} />
         </button>
         <textarea
           ref={textareaRef}
@@ -83,7 +84,7 @@ export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, plac
           onClick={handleSubmit}
           disabled={disabled || !input.trim()}
         >
-          <span>→</span>
+          <Send size={18} />
         </button>
       </div>
       <div className="input-hint">Press Enter to send · Shift+Enter for new line</div>

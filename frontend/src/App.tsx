@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './hooks'
 import { ChatPage } from './pages/ChatPage'
 import { AuthPage } from './pages/AuthPage'
+import { Hexagon, Loader2 } from 'lucide-react'
 import './styles/global.css'
 
 function AppContent() {
@@ -10,7 +11,7 @@ function AppContent() {
     return (
       <div className="loading-screen">
         <div className="loading-logo">
-          <span className="logo-icon">◈</span>
+          <Hexagon className="logo-icon spinning" size={32} />
           <span className="loading-text">Loading...</span>
         </div>
       </div>
