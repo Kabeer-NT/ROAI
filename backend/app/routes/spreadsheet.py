@@ -13,6 +13,7 @@ import pandas as pd
 import io
 import uuid
 import json
+import re
 
 from app.services.db import get_db
 from app.services.auth import get_current_user
@@ -218,12 +219,12 @@ async def execute_python_endpoint(
 @router.get("/spreadsheet/{file_id}/structure")
 async def get_spreadsheet_structure(
     file_id: str,
+    include_cells: bool = False,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Get the structure of a spreadsheet (what the LLM sees).
-    Useful for debugging.
     """
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
@@ -242,21 +243,73 @@ async def get_spreadsheet_structure(
     
     structures = spreadsheet_context["structures"][file_id]
     
-    return {
+    result = {
         "file_id": file_id,
         "filename": ss.filename,
-        "structures": {
-            name: {
-                "rows": s.rows,
-                "cols": s.cols,
-                "headers": s.headers,
-                "row_labels": s.row_labels[:20],
-                "formulas": dict(list(s.formulas.items())[:10]),
-                "cell_type_counts": _count_types(s.cell_types)
-            }
-            for name, s in structures.items()
-        }
+        "structures": {}
     }
+    
+    for name, s in structures.items():
+        # Handle both dict and list formats for backwards compatibility
+        if isinstance(s.row_labels, dict):
+            row_labels = dict(list(s.row_labels.items())[:25])
+        else:
+            row_labels = s.row_labels[:25] if s.row_labels else []
+        
+        if isinstance(s.headers, dict):
+            headers = s.headers
+        else:
+            headers = s.headers if s.headers else []
+        
+        sheet_data = {
+            "rows": s.rows,
+            "cols": s.cols,
+            "headers": headers,
+            "row_labels": row_labels,
+            "formulas": dict(list(s.formulas.items())[:20]) if s.formulas else {},
+            "cell_type_counts": _count_types(s.cell_types) if s.cell_types else {}
+        }
+        
+        # Include text_values for grid view if requested
+        if include_cells:
+            # Include text values (limited to grid display area)
+            if hasattr(s, 'text_values') and s.text_values:
+                limited_text_values = {}
+                for cell_addr, text in s.text_values.items():
+                    match = re.match(r'^([A-Z]+)(\d+)$', cell_addr)
+                    if match:
+                        col_letter, row_num = match.groups()
+                        row_num = int(row_num)
+                        col_idx = 0
+                        for i, c in enumerate(reversed(col_letter)):
+                            col_idx += (ord(c) - ord('A') + 1) * (26 ** i)
+                        col_idx -= 1
+                        if row_num <= 30 and col_idx < 15:
+                            limited_text_values[cell_addr] = text
+                sheet_data["text_values"] = limited_text_values
+        
+        # Include full cell types for grid view if requested
+        if include_cells and hasattr(s, 'cell_types') and s.cell_types:
+            limited_cell_types = {}
+            for cell_addr, cell_type in s.cell_types.items():
+                match = re.match(r'^([A-Z]+)(\d+)$', cell_addr)
+                if match:
+                    col_letter, row_num = match.groups()
+                    row_num = int(row_num)
+                    # Calculate column index
+                    col_idx = 0
+                    for i, c in enumerate(reversed(col_letter)):
+                        col_idx += (ord(c) - ord('A') + 1) * (26 ** i)
+                    col_idx -= 1
+                    
+                    if row_num <= 30 and col_idx < 15:
+                        limited_cell_types[cell_addr] = cell_type
+            
+            sheet_data["cell_types"] = limited_cell_types
+        
+        result["structures"][name] = sheet_data
+    
+    return result
 
 
 def _count_types(cell_types: dict) -> dict:
