@@ -2,6 +2,7 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Copy, Check } from 'lucide-react'
 import type { Message } from '../types'
+import { ThinkingBlock } from './ThinkingBlock'
 
 interface ChatMessageProps {
   message: Message
@@ -45,6 +46,12 @@ export function ChatMessage({ message }: ChatMessageProps) {
             </button>
           )}
         </div>
+        
+        {/* Show thinking block for assistant messages with tool calls */}
+        {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
+          <ThinkingBlock toolCalls={message.toolCalls} />
+        )}
+        
         <div className="message-content">
           <ReactMarkdown
             components={{
