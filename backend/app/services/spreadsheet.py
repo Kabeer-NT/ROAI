@@ -4,15 +4,17 @@ Spreadsheet Service - Relationship-Based Approach
 LLM sees ONLY structure (headers, labels, formulas, cell types).
 LLM generates formulas/code to answer questions.
 We execute locally on real data and return results.
+
+OPTION B: Use openpyxl directly for execution - cell references just work.
 """
 
 import pandas as pd
 import openpyxl
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import get_column_letter, column_index_from_string
 import re
 import json
 from typing import Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from io import BytesIO
 
 
@@ -22,11 +24,11 @@ class SheetStructure:
     name: str
     rows: int
     cols: int
-    headers: list[str]
-    row_labels: list[str]
+    headers: dict[str, str]  # cell_address -> header text (e.g., "C4" -> "Shares Held")
+    row_labels: dict[str, str]  # cell_address -> label text (column A)
+    text_values: dict[str, str]  # cell_address -> any text value (for display)
     formulas: dict[str, str]  # cell_address -> formula
     cell_types: dict[str, str]  # cell_address -> "numeric", "text", "formula", "empty"
-    sample_text_values: dict[str, str]  # Only text/label values, no numbers
 
 
 # Global storage
@@ -43,68 +45,10 @@ def clear_context():
     spreadsheet_context["raw_bytes"] = {}
 
 
-def _extract_cell_references(formula: str) -> list[str]:
-    """Extract cell references from a formula string"""
-    pattern = r"(?:\'?[\w\s]+\'?!)?\$?[A-Z]{1,3}\$?\d+"
-    matches = re.findall(pattern, formula, re.IGNORECASE)
-    normalized = []
-    for match in matches:
-        if "!" in match:
-            match = match.split("!")[-1]
-        match = match.replace("$", "").upper()
-        normalized.append(match)
-    return normalized
-
-
-def extract_structure_from_dataframe(df: pd.DataFrame, sheet_name: str) -> SheetStructure:
-    """
-    Extract structure from DataFrame - only types and labels, NO numeric values.
-    """
-    cell_types = {}
-    sample_text = {}
-    
-    headers = [str(c) for c in df.columns.tolist()]
-    
-    for col_idx, col_name in enumerate(df.columns):
-        col_letter = get_column_letter(col_idx + 1)
-        cell_types[f"{col_letter}1"] = "header"
-        sample_text[f"{col_letter}1"] = str(col_name)
-        
-        for row_idx, value in enumerate(df[col_name], start=2):
-            cell_addr = f"{col_letter}{row_idx}"
-            
-            if pd.isna(value):
-                cell_types[cell_addr] = "empty"
-            elif isinstance(value, (int, float)):
-                cell_types[cell_addr] = "numeric"
-                # DO NOT store the value
-            else:
-                cell_types[cell_addr] = "text"
-                sample_text[cell_addr] = str(value)[:50]  # Store text values (labels)
-    
-    # Extract row labels (first column text values)
-    row_labels = []
-    if len(df.columns) > 0:
-        first_col = df.iloc[:, 0]
-        for val in first_col:
-            if pd.notna(val) and not isinstance(val, (int, float)):
-                row_labels.append(str(val))
-    
-    return SheetStructure(
-        name=sheet_name,
-        rows=len(df) + 1,
-        cols=len(df.columns),
-        headers=headers,
-        row_labels=row_labels,
-        formulas={},  # CSV/TSV don't have formulas
-        cell_types=cell_types,
-        sample_text_values=sample_text
-    )
-
-
 def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]:
     """
     Extract structure from Excel file including formulas.
+    Detects header rows automatically and maps cell addresses.
     """
     structures = {}
     
@@ -118,13 +62,33 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
             
             formulas = {}
             cell_types = {}
-            sample_text = {}
-            headers = []
-            row_labels = []
+            headers = {}  # Now maps cell address -> header text
+            row_labels = {}  # Maps cell address -> label text
+            text_values = {}  # ALL text values for grid display
             
             max_row = ws.max_row or 1
             max_col = ws.max_column or 1
             
+            # First pass: find the header row (row with most text cells that look like column names)
+            header_row = None
+            max_header_score = 0
+            
+            for row_idx in range(1, min(max_row + 1, 15)):
+                text_count = 0
+                non_empty_count = 0
+                for col_idx in range(1, max_col + 1):
+                    value = ws_values.cell(row=row_idx, column=col_idx).value
+                    if value is not None and value != "":
+                        non_empty_count += 1
+                        if isinstance(value, str) and not value.startswith("⚠") and not value.startswith("🔍"):
+                            text_count += 1
+                
+                # Score: prefer rows with many text cells (likely headers)
+                if text_count >= 3 and text_count > max_header_score:
+                    max_header_score = text_count
+                    header_row = row_idx
+            
+            # Second pass: extract structure
             for row_idx in range(1, max_row + 1):
                 for col_idx in range(1, max_col + 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
@@ -140,20 +104,19 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
                         cell_types[cell_addr] = "empty"
                     elif isinstance(value, (int, float)):
                         cell_types[cell_addr] = "numeric"
-                        # DO NOT store numeric values
                     else:
                         cell_types[cell_addr] = "text"
-                        sample_text[cell_addr] = str(value)[:50]
+                        # Store ALL text values for grid display
+                        text_values[cell_addr] = str(value)[:100]  # Limit length
                     
-                    # Headers (first row)
-                    if row_idx == 1 and value is not None:
-                        headers.append(str(value))
-                        sample_text[cell_addr] = str(value)
+                    # Record headers (from detected header row)
+                    if row_idx == header_row and value is not None and isinstance(value, str):
+                        headers[cell_addr] = str(value)
                     
-                    # Row labels (first column, non-numeric)
-                    if col_idx == 1 and row_idx > 1 and value is not None:
-                        if not isinstance(value, (int, float)):
-                            row_labels.append(str(value))
+                    # Record row labels (first column text values, below header)
+                    if col_idx == 1 and header_row and row_idx > header_row:
+                        if value is not None and isinstance(value, str) and not value.startswith("⚠") and not value.startswith("🔍") and not value.startswith("•"):
+                            row_labels[cell_addr] = str(value)
             
             structures[sheet_name] = SheetStructure(
                 name=sheet_name,
@@ -161,9 +124,9 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
                 cols=max_col,
                 headers=headers,
                 row_labels=row_labels,
+                text_values=text_values,
                 formulas=formulas,
                 cell_types=cell_types,
-                sample_text_values=sample_text
             )
         
         wb.close()
@@ -173,6 +136,45 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
         print(f"Error extracting structure: {e}")
         
     return structures
+
+
+def extract_structure_from_csv(df: pd.DataFrame, sheet_name: str) -> SheetStructure:
+    """Extract structure from CSV/TSV DataFrame."""
+    cell_types = {}
+    headers = {}
+    row_labels = {}
+    text_values = {}
+    
+    for col_idx, col_name in enumerate(df.columns):
+        col_letter = get_column_letter(col_idx + 1)
+        cell_addr = f"{col_letter}1"
+        cell_types[cell_addr] = "text"
+        headers[cell_addr] = str(col_name)
+        text_values[cell_addr] = str(col_name)
+        
+        for row_idx, value in enumerate(df[col_name], start=2):
+            cell_addr = f"{col_letter}{row_idx}"
+            
+            if pd.isna(value):
+                cell_types[cell_addr] = "empty"
+            elif isinstance(value, (int, float)):
+                cell_types[cell_addr] = "numeric"
+            else:
+                cell_types[cell_addr] = "text"
+                text_values[cell_addr] = str(value)[:100]
+                if col_idx == 0:
+                    row_labels[cell_addr] = str(value)[:50]
+    
+    return SheetStructure(
+        name=sheet_name,
+        rows=len(df) + 1,
+        cols=len(df.columns),
+        headers=headers,
+        row_labels=row_labels,
+        text_values=text_values,
+        formulas={},
+        cell_types=cell_types,
+    )
 
 
 def add_file_to_context(file_id: str, filename: str, file_bytes: bytes, sheets: dict[str, pd.DataFrame]):
@@ -191,7 +193,7 @@ def add_file_to_context(file_id: str, filename: str, file_bytes: bytes, sheets: 
     else:
         structures = {}
         for sheet_name, df in sheets.items():
-            structures[sheet_name] = extract_structure_from_dataframe(df, sheet_name)
+            structures[sheet_name] = extract_structure_from_csv(df, sheet_name)
     
     spreadsheet_context["structures"][file_id] = structures
 
@@ -205,12 +207,13 @@ def remove_file_from_context(file_id: str):
 def build_llm_context() -> str:
     """
     Build context for LLM showing ONLY structure - NO numeric values.
+    Shows exact cell addresses so Claude can reference them directly.
     """
     if not spreadsheet_context["structures"]:
         return ""
     
     parts = ["# SPREADSHEET STRUCTURE (numeric values hidden)\n"]
-    parts.append("You can reference cells and generate formulas. I will execute them and return results.\n")
+    parts.append("Reference cells directly by address (e.g., C5, D4:D9). I will execute formulas and return results.\n")
     
     for file_id, file_data in spreadsheet_context["files"].items():
         filename = file_data["filename"]
@@ -222,115 +225,173 @@ def build_llm_context() -> str:
             parts.append(f"\n### Sheet: {sheet_name}")
             parts.append(f"Size: {structure.rows} rows × {structure.cols} columns\n")
             
-            # Show headers with column letters
+            # Show headers with exact cell addresses
             if structure.headers:
-                header_map = []
-                for i, h in enumerate(structure.headers):
-                    col_letter = get_column_letter(i + 1)
-                    header_map.append(f"{col_letter}: {h}")
-                parts.append(f"**Columns:** {', '.join(header_map)}")
+                parts.append("**Column Headers:**")
+                for cell_addr, header_text in sorted(structure.headers.items(), key=lambda x: column_index_from_string(x[0].rstrip('0123456789'))):
+                    parts.append(f"  {cell_addr}: {header_text}")
             
-            # Show row labels with row numbers
+            # Show row labels with exact cell addresses
             if structure.row_labels:
-                parts.append(f"\n**Row labels (column A):**")
-                for i, label in enumerate(structure.row_labels[:30], start=2):
-                    parts.append(f"  Row {i}: {label}")
-                if len(structure.row_labels) > 30:
-                    parts.append(f"  ... and {len(structure.row_labels) - 30} more rows")
+                parts.append(f"\n**Row Labels (column A):**")
+                items = list(structure.row_labels.items())[:25]
+                for cell_addr, label in items:
+                    parts.append(f"  {cell_addr}: {label}")
+                if len(structure.row_labels) > 25:
+                    parts.append(f"  ... and {len(structure.row_labels) - 25} more rows")
+            
+            # Show data range
+            if structure.headers:
+                header_cells = list(structure.headers.keys())
+                if header_cells:
+                    # Find the header row number
+                    header_row = int(re.search(r'\d+', header_cells[0]).group())
+                    data_start_row = header_row + 1
+                    
+                    # Find last data row (last row with numeric data before totals/notes)
+                    last_data_row = structure.rows
+                    parts.append(f"\n**Data Range:** Row {data_start_row} to ~Row {last_data_row} (check row labels for actual data rows)")
             
             # Show formulas
             if structure.formulas:
-                parts.append(f"\n**Existing formulas:**")
-                for cell_addr, formula in list(structure.formulas.items())[:20]:
+                parts.append(f"\n**Existing Formulas:**")
+                for cell_addr, formula in list(structure.formulas.items())[:15]:
                     parts.append(f"  {cell_addr}: {formula}")
-                if len(structure.formulas) > 20:
-                    parts.append(f"  ... and {len(structure.formulas) - 20} more formulas")
+                if len(structure.formulas) > 15:
+                    parts.append(f"  ... and {len(structure.formulas) - 15} more formulas")
             
             # Show cell type summary
             type_counts = {}
             for cell_type in structure.cell_types.values():
                 type_counts[cell_type] = type_counts.get(cell_type, 0) + 1
-            parts.append(f"\n**Cell types:** {json.dumps(type_counts)}")
+            parts.append(f"\n**Cell Types:** {json.dumps(type_counts)}")
         
         parts.append("")
     
     return "\n".join(parts)
 
 
-def execute_formula(formula: str, file_id: str, sheet_name: str) -> Any:
+def _get_cell_value(ws, cell_ref: str) -> Any:
+    """Get value from a cell reference like 'C5'."""
+    match = re.match(r'^([A-Z]+)(\d+)$', cell_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid cell reference: {cell_ref}")
+    
+    col_letter, row_num = match.groups()
+    return ws[cell_ref].value
+
+
+def _get_range_values(ws, range_ref: str) -> list:
+    """Get values from a range like 'C5:C10'."""
+    match = re.match(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$', range_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid range reference: {range_ref}")
+    
+    col_start, row_start, col_end, row_end = match.groups()
+    row_start, row_end = int(row_start), int(row_end)
+    col_start_idx = column_index_from_string(col_start)
+    col_end_idx = column_index_from_string(col_end)
+    
+    values = []
+    for row in range(row_start, row_end + 1):
+        for col in range(col_start_idx, col_end_idx + 1):
+            cell = ws.cell(row=row, column=col)
+            if cell.value is not None and isinstance(cell.value, (int, float)):
+                values.append(cell.value)
+    
+    return values
+
+
+def execute_formula(formula: str, file_id: str, sheet_name: str = None) -> Any:
     """
-    Execute a formula on the real spreadsheet data.
-    Returns the computed result.
+    Execute a formula on the real spreadsheet data using openpyxl.
+    Cell references match exactly what's in the file - no offset confusion.
     """
-    if file_id not in spreadsheet_context["files"]:
+    if file_id not in spreadsheet_context["raw_bytes"]:
         return {"error": "File not found"}
     
-    sheets = spreadsheet_context["files"][file_id]["sheets"]
-    if sheet_name not in sheets:
-        return {"error": f"Sheet '{sheet_name}' not found"}
-    
-    df = sheets[sheet_name]
-    
-    # Handle common formula patterns
-    formula = formula.strip()
-    if formula.startswith("="):
-        formula = formula[1:]
+    raw_bytes = spreadsheet_context["raw_bytes"][file_id]
     
     try:
+        wb = openpyxl.load_workbook(BytesIO(raw_bytes), data_only=True)
+        
+        # Auto-detect sheet if not specified
+        if not sheet_name:
+            if len(wb.sheetnames) == 1:
+                sheet_name = wb.sheetnames[0]
+            else:
+                wb.close()
+                return {"error": f"Multiple sheets available: {wb.sheetnames}. Please specify sheet_name."}
+        
+        if sheet_name not in wb.sheetnames:
+            wb.close()
+            return {"error": f"Sheet '{sheet_name}' not found. Available: {wb.sheetnames}"}
+        
+        ws = wb[sheet_name]
+        
+        # Clean up formula
+        formula = formula.strip()
+        if formula.startswith("="):
+            formula = formula[1:]
+        
+        result = None
+        
         # SUM formula
-        sum_match = re.match(r'SUM\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)', formula, re.IGNORECASE)
+        sum_match = re.match(r'SUM\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
         if sum_match:
-            col_start, row_start, col_end, row_end = sum_match.groups()
-            col_idx = ord(col_start.upper()) - ord('A')
-            row_start, row_end = int(row_start) - 2, int(row_end) - 1  # -2 for header and 0-index
-            values = df.iloc[row_start:row_end, col_idx]
-            return float(values.sum())
+            range_ref = sum_match.group(1)
+            values = _get_range_values(ws, range_ref)
+            result = sum(values) if values else 0
         
         # AVERAGE formula
-        avg_match = re.match(r'AVERAGE\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)', formula, re.IGNORECASE)
-        if avg_match:
-            col_start, row_start, col_end, row_end = avg_match.groups()
-            col_idx = ord(col_start.upper()) - ord('A')
-            row_start, row_end = int(row_start) - 2, int(row_end) - 1
-            values = df.iloc[row_start:row_end, col_idx]
-            return float(values.mean())
-        
-        # Single cell reference
-        cell_match = re.match(r'^([A-Z]+)(\d+)$', formula, re.IGNORECASE)
-        if cell_match:
-            col, row = cell_match.groups()
-            col_idx = ord(col.upper()) - ord('A')
-            row_idx = int(row) - 2  # -2 for header and 0-index
-            return df.iloc[row_idx, col_idx]
+        if result is None:
+            avg_match = re.match(r'AVERAGE\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
+            if avg_match:
+                range_ref = avg_match.group(1)
+                values = _get_range_values(ws, range_ref)
+                result = sum(values) / len(values) if values else 0
         
         # COUNT formula
-        count_match = re.match(r'COUNT\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)', formula, re.IGNORECASE)
-        if count_match:
-            col_start, row_start, col_end, row_end = count_match.groups()
-            col_idx = ord(col_start.upper()) - ord('A')
-            row_start, row_end = int(row_start) - 2, int(row_end) - 1
-            values = df.iloc[row_start:row_end, col_idx]
-            return int(values.count())
+        if result is None:
+            count_match = re.match(r'COUNT\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
+            if count_match:
+                range_ref = count_match.group(1)
+                values = _get_range_values(ws, range_ref)
+                result = len(values)
         
         # MAX formula
-        max_match = re.match(r'MAX\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)', formula, re.IGNORECASE)
-        if max_match:
-            col_start, row_start, col_end, row_end = max_match.groups()
-            col_idx = ord(col_start.upper()) - ord('A')
-            row_start, row_end = int(row_start) - 2, int(row_end) - 1
-            values = df.iloc[row_start:row_end, col_idx]
-            return float(values.max())
+        if result is None:
+            max_match = re.match(r'MAX\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
+            if max_match:
+                range_ref = max_match.group(1)
+                values = _get_range_values(ws, range_ref)
+                result = max(values) if values else 0
         
         # MIN formula
-        min_match = re.match(r'MIN\(([A-Z]+)(\d+):([A-Z]+)(\d+)\)', formula, re.IGNORECASE)
-        if min_match:
-            col_start, row_start, col_end, row_end = min_match.groups()
-            col_idx = ord(col_start.upper()) - ord('A')
-            row_start, row_end = int(row_start) - 2, int(row_end) - 1
-            values = df.iloc[row_start:row_end, col_idx]
-            return float(values.min())
+        if result is None:
+            min_match = re.match(r'MIN\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
+            if min_match:
+                range_ref = min_match.group(1)
+                values = _get_range_values(ws, range_ref)
+                result = min(values) if values else 0
         
-        return {"error": f"Unsupported formula: {formula}"}
+        # Single cell reference
+        if result is None:
+            cell_match = re.match(r'^([A-Z]+\d+)$', formula, re.IGNORECASE)
+            if cell_match:
+                cell_ref = cell_match.group(1)
+                result = _get_cell_value(ws, cell_ref)
+        
+        wb.close()
+        
+        if result is None:
+            return {"error": f"Unsupported formula: {formula}"}
+        
+        # Convert numpy types to Python types
+        if hasattr(result, 'item'):
+            result = result.item()
+        
+        return result
         
     except Exception as e:
         return {"error": str(e)}
@@ -339,24 +400,70 @@ def execute_formula(formula: str, file_id: str, sheet_name: str) -> Any:
 def execute_python_query(code: str, file_id: str) -> Any:
     """
     Execute Python/pandas code on the spreadsheet data.
-    Safer alternative to formulas for complex queries.
+    For complex queries that can't be expressed as simple formulas.
+    
+    The 'sheets' dict contains DataFrames, but also provides 'ws' for direct cell access.
     """
-    if file_id not in spreadsheet_context["files"]:
+    if file_id not in spreadsheet_context["raw_bytes"]:
         return {"error": "File not found"}
     
-    sheets = spreadsheet_context["files"][file_id]["sheets"]
-    
-    # Create a safe execution environment
-    safe_globals = {
-        "pd": pd,
-        "sheets": sheets,
-    }
+    raw_bytes = spreadsheet_context["raw_bytes"][file_id]
     
     try:
+        # Load workbook for direct cell access
+        wb = openpyxl.load_workbook(BytesIO(raw_bytes), data_only=True)
+        
+        # Create sheets dict with both DataFrame and cell accessor
+        sheets = {}
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            
+            # Convert to DataFrame, reading all data as-is
+            data = []
+            for row in ws.iter_rows(values_only=True):
+                data.append(row)
+            
+            if data:
+                df = pd.DataFrame(data[1:], columns=data[0]) if len(data) > 1 else pd.DataFrame()
+                sheets[sheet_name] = df
+        
+        # Also provide direct worksheet access
+        worksheets = {name: wb[name] for name in wb.sheetnames}
+        
+        # Helper function to get cell value
+        def cell(sheet: str, ref: str):
+            return worksheets[sheet][ref].value
+        
+        # Helper function to get range values
+        def range_values(sheet: str, range_ref: str):
+            return _get_range_values(worksheets[sheet], range_ref)
+        
+        # Create safe execution environment
+        safe_globals = {
+            "pd": pd,
+            "sheets": sheets,
+            "ws": worksheets,
+            "cell": cell,
+            "range_values": range_values,
+        }
+        
         # Execute and capture result
         exec_globals = safe_globals.copy()
         exec(f"__result__ = {code}", exec_globals)
-        return exec_globals.get("__result__")
+        result = exec_globals.get("__result__")
+        
+        wb.close()
+        
+        # Convert numpy/pandas types
+        if hasattr(result, 'item'):
+            result = result.item()
+        elif isinstance(result, pd.Series):
+            result = result.tolist()
+        elif isinstance(result, pd.DataFrame):
+            result = result.to_dict('records')
+        
+        return result
+        
     except Exception as e:
         return {"error": str(e)}
 
@@ -366,7 +473,6 @@ def get_file_id_by_name(filename: str) -> Optional[str]:
     for file_id, file_data in spreadsheet_context["files"].items():
         if filename.lower() in file_data["filename"].lower():
             return file_id
-    # Return first file if only one exists
     if len(spreadsheet_context["files"]) == 1:
         return list(spreadsheet_context["files"].keys())[0]
     return None
