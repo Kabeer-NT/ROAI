@@ -1,8 +1,34 @@
+export interface ToolCall {
+  type: 'formula' | 'pandas' | 'web_search'
+  formula?: string
+  code?: string
+  query?: string
+  sheet?: string
+  result: any
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  toolCalls?: ToolCall[]
+}
+
+export interface SheetStructure {
+  name: string
+  rows: number
+  cols: number
+  headers: string[]
+  rowLabels: string[]
+  formulas: Record<string, string>
+  cellTypeCounts: Record<string, number>
+}
+
+export interface SpreadsheetStructure {
+  file_id: string
+  filename: string
+  structures: Record<string, SheetStructure>
 }
 
 export interface SheetInfo {
@@ -17,7 +43,7 @@ export interface SpreadsheetFile {
   filename: string
   sheets: SheetInfo[]
   uploadedAt: Date
-  hasHandle?: boolean // indicates if file has a handle for auto-reload
+  hasHandle?: boolean
 }
 
 export type ConnectionStatus = 'checking' | 'connected' | 'error'
