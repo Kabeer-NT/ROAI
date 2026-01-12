@@ -4,7 +4,7 @@ Chat Routes (Protected)
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from sqlalchemy.orm import Session
 
 from app.services.db import get_db
@@ -26,10 +26,20 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[int] = None
 
 
+class ToolCall(BaseModel):
+    type: str
+    formula: Optional[str] = None
+    code: Optional[str] = None
+    query: Optional[str] = None
+    sheet: Optional[str] = None
+    result: Any
+
+
 class ChatResponse(BaseModel):
     response: str
     model: str
     conversation_id: Optional[int] = None
+    tool_calls: list[ToolCall] = []
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -68,5 +78,6 @@ async def chat_endpoint(
     return ChatResponse(
         response=result["response"],
         model=result["model"],
-        conversation_id=conversation_id
+        conversation_id=conversation_id,
+        tool_calls=result.get("tool_calls", [])
     )
