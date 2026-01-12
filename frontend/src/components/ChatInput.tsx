@@ -3,11 +3,12 @@ import { useState, useRef, useEffect } from 'react'
 interface ChatInputProps {
   onSend: (message: string) => void
   onFilesAdd: (files: FileList) => void
+  onFilePickerOpen?: () => Promise<boolean>
   disabled: boolean
   placeholder: string
 }
 
-export function ChatInput({ onSend, onFilesAdd, disabled, placeholder }: ChatInputProps) {
+export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, placeholder }: ChatInputProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -33,6 +34,16 @@ export function ChatInput({ onSend, onFilesAdd, disabled, placeholder }: ChatInp
     }
   }
 
+  const handleAttachClick = async () => {
+    // Prefer File System Access API if available (enables auto-reload)
+    if (onFilePickerOpen) {
+      const handled = await onFilePickerOpen()
+      if (handled) return
+    }
+    // Fallback to regular file input
+    fileInputRef.current?.click()
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onFilesAdd(e.target.files)
@@ -45,8 +56,8 @@ export function ChatInput({ onSend, onFilesAdd, disabled, placeholder }: ChatInp
       <div className="input-box">
         <button
           className="attach-btn"
-          onClick={() => fileInputRef.current?.click()}
-          title="Upload spreadsheet"
+          onClick={handleAttachClick}
+          title="Upload spreadsheet (with auto-reload)"
         >
           <input
             ref={fileInputRef}
@@ -72,7 +83,7 @@ export function ChatInput({ onSend, onFilesAdd, disabled, placeholder }: ChatInp
           onClick={handleSubmit}
           disabled={disabled || !input.trim()}
         >
-          <span>↑</span>
+          <span>→</span>
         </button>
       </div>
       <div className="input-hint">Press Enter to send · Shift+Enter for new line</div>

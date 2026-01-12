@@ -3,6 +3,8 @@ import type { Message, SpreadsheetFile, ConnectionStatus } from '../types'
 import { useAuth } from './useAuth'
 
 export { useAuth, AuthProvider } from './useAuth'
+export { useFileHandle } from './useFileHandle'
+export type { FileHandleEntry } from './useFileHandle'
 
 export function useModels() {
   const [models, setModels] = useState<string[]>([])
@@ -63,6 +65,40 @@ export function useSpreadsheets() {
     }
   }, [token])
 
+  const reuploadFile = useCallback(async (id: string, file: File): Promise<SpreadsheetFile | null> => {
+    if (!token) return null
+    
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      await fetch(`/api/spreadsheet/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      
+      const data = await res.json()
+      const updatedFile: SpreadsheetFile = {
+        id: data.file_id || id,
+        filename: data.filename,
+        sheets: data.sheets,
+        uploadedAt: new Date(),
+      }
+      
+      setFiles(prev => prev.map(f => f.id === id ? updatedFile : f))
+      return updatedFile
+    } catch {
+      return null
+    }
+  }, [token])
+
   const removeFile = useCallback(async (id: string) => {
     if (!token) return
     await fetch(`/api/spreadsheet/${id}`, {
@@ -81,7 +117,7 @@ export function useSpreadsheets() {
     setFiles([])
   }, [token])
 
-  return { files, isUploading, uploadFile, removeFile, clearAll }
+  return { files, setFiles, isUploading, uploadFile, reuploadFile, removeFile, clearAll }
 }
 
 export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
@@ -111,7 +147,7 @@ export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
         },
         body: JSON.stringify({
           messages: [...messages, userMessage]
-            .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌'))
+            .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
             .map(m => ({ role: m.role, content: m.content })),
           model: selectedModel,
         }),

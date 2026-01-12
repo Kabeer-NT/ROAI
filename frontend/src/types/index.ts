@@ -17,6 +17,7 @@ export interface SpreadsheetFile {
   filename: string
   sheets: SheetInfo[]
   uploadedAt: Date
+  hasHandle?: boolean // indicates if file has a handle for auto-reload
 }
 
 export type ConnectionStatus = 'checking' | 'connected' | 'error'

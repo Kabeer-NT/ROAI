@@ -18,8 +18,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="R-O-AI API",
-    description="Financial Analysis Assistant with Auth",
-    version="2.0.0",
+    description="Financial Analysis Assistant with Claude",
+    version="3.0.0",
     lifespan=lifespan
 )
 
@@ -45,4 +45,4 @@ app.include_router(spreadsheet.router, prefix="/api")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "3.0.0"}

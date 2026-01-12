@@ -1,4 +1,4 @@
-import { LogOut, User } from 'lucide-react'
+import { LogOut, User, RefreshCw } from 'lucide-react'
 import type { SpreadsheetFile, ConnectionStatus } from '../types'
 import { FileCard } from './FileCard'
 import { DropZone } from './DropZone'
@@ -14,7 +14,9 @@ interface SidebarProps {
   files: SpreadsheetFile[]
   onFileRemove: (id: string) => void
   onFilesAdd: (files: FileList) => void
+  onFilePickerOpen?: () => Promise<boolean>
   isUploading: boolean
+  isReloading?: boolean
 }
 
 export function Sidebar({
@@ -27,7 +29,9 @@ export function Sidebar({
   files,
   onFileRemove,
   onFilesAdd,
+  onFilePickerOpen,
   isUploading,
+  isReloading,
 }: SidebarProps) {
   const { user, logout } = useAuth()
 
@@ -94,8 +98,20 @@ export function Sidebar({
             <div className="section-label">
               Data Sources
               {files.length > 0 && <span className="count">{files.length}</span>}
+              {isReloading && (
+                <RefreshCw size={12} className="reloading-icon" />
+              )}
             </div>
-            <DropZone onFilesAdd={onFilesAdd} isUploading={isUploading} />
+            <DropZone 
+              onFilesAdd={onFilesAdd} 
+              onFilePickerOpen={onFilePickerOpen}
+              isUploading={isUploading} 
+            />
+            {onFilePickerOpen && (
+              <div className="drop-zone-note">
+                Click to enable auto-reload on file changes
+              </div>
+            )}
           </div>
 
           {files.length > 0 && (

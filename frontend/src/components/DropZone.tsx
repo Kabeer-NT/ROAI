@@ -2,10 +2,11 @@ import { useState, useCallback, useRef } from 'react'
 
 interface DropZoneProps {
   onFilesAdd: (files: FileList) => void
+  onFilePickerOpen?: () => Promise<boolean>
   isUploading: boolean
 }
 
-export function DropZone({ onFilesAdd, isUploading }: DropZoneProps) {
+export function DropZone({ onFilesAdd, onFilePickerOpen, isUploading }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -32,7 +33,15 @@ export function DropZone({ onFilesAdd, isUploading }: DropZoneProps) {
     }
   }, [onFilesAdd])
 
-  const handleClick = () => inputRef.current?.click()
+  const handleClick = async () => {
+    // Prefer File System Access API if available (enables auto-reload)
+    if (onFilePickerOpen) {
+      const handled = await onFilePickerOpen()
+      if (handled) return
+    }
+    // Fallback to regular file input
+    inputRef.current?.click()
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.services.db import get_db
 from app.services.auth import get_current_user
-from app.services import ollama
+from app.services import claude
 from app.models import User, Conversation, Message
 
 router = APIRouter(tags=["chat"])
@@ -33,13 +33,13 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(
+async def chat_endpoint(
     request: ChatRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    result = await ollama.chat(messages, request.model)
+    result = await claude.chat(messages, request.model)
     
     conversation_id = request.conversation_id
     
