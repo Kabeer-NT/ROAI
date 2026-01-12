@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Message, SpreadsheetFile, ConnectionStatus } from '../types'
+import type { Message, SpreadsheetFile, ConnectionStatus, ToolCall } from '../types'
 import { useAuth } from './useAuth'
 
 export { useAuth, AuthProvider } from './useAuth'
@@ -159,11 +159,15 @@ export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
         throw new Error(data.detail || 'Request failed')
       }
       
+      // Parse tool_calls from response
+      const toolCalls: ToolCall[] = data.tool_calls || []
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: data.response,
         timestamp: new Date(),
+        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       }
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
