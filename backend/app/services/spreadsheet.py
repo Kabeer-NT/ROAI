@@ -418,13 +418,25 @@ def execute_python_query(code: str, file_id: str) -> Any:
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             
-            # Convert to DataFrame, reading all data as-is
+            # Convert to DataFrame with proper header detection
             data = []
             for row in ws.iter_rows(values_only=True):
-                data.append(row)
+                data.append(list(row))
             
             if data:
-                df = pd.DataFrame(data[1:], columns=data[0]) if len(data) > 1 else pd.DataFrame()
+                # Find header row (row with most non-empty string values)
+                header_row_idx = 0
+                max_text_count = 0
+                for idx, row in enumerate(data[:15]):  # Check first 15 rows
+                    text_count = sum(1 for v in row if isinstance(v, str) and v and not v.startswith('⚠') and not v.startswith('🔍'))
+                    if text_count >= 3 and text_count > max_text_count:
+                        max_text_count = text_count
+                        header_row_idx = idx
+                
+                # Use detected header row
+                headers = data[header_row_idx] if header_row_idx < len(data) else data[0]
+                df_data = data[header_row_idx + 1:] if header_row_idx + 1 < len(data) else []
+                df = pd.DataFrame(df_data, columns=headers)
                 sheets[sheet_name] = df
         
         # Also provide direct worksheet access
@@ -449,8 +461,45 @@ def execute_python_query(code: str, file_id: str) -> Any:
         
         # Execute and capture result
         exec_globals = safe_globals.copy()
-        exec(f"__result__ = {code}", exec_globals)
-        result = exec_globals.get("__result__")
+        
+        # Handle multi-line code: execute all, return last expression
+        code = code.strip()
+        
+        # Remove comments from code to avoid syntax issues
+        lines = []
+        for line in code.split('\n'):
+            # Remove inline comments but keep the code part
+            if '#' in line:
+                line = line.split('#')[0].rstrip()
+            if line.strip():
+                lines.append(line)
+        
+        clean_code = '\n'.join(lines)
+        
+        if not clean_code:
+            return {"error": "Empty code after removing comments"}
+        
+        # If it's a simple single expression, just eval it
+        if '\n' not in clean_code and not any(kw in clean_code for kw in ['=', 'print(', 'for ', 'if ', 'while ']):
+            result = eval(clean_code, exec_globals)
+        else:
+            # Multi-line or has statements: exec everything, capture last line
+            lines = clean_code.split('\n')
+            last_line = lines[-1].strip()
+            
+            # Check if last line is an expression (not an assignment or print)
+            is_assignment = '=' in last_line and not any(op in last_line for op in ['==', '!=', '<=', '>='])
+            is_print = last_line.startswith('print(')
+            
+            if is_assignment or is_print:
+                # Just exec everything
+                exec(clean_code, exec_globals)
+                result = "Code executed successfully"
+            else:
+                # Exec all but last line, then eval last line
+                if len(lines) > 1:
+                    exec('\n'.join(lines[:-1]), exec_globals)
+                result = eval(last_line, exec_globals)
         
         wb.close()
         
