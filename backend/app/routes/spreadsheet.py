@@ -272,40 +272,13 @@ async def get_spreadsheet_structure(
         
         # Include text_values for grid view if requested
         if include_cells:
-            # Include text values (limited to grid display area)
+            # Include text values (all cells for full grid display)
             if hasattr(s, 'text_values') and s.text_values:
-                limited_text_values = {}
-                for cell_addr, text in s.text_values.items():
-                    match = re.match(r'^([A-Z]+)(\d+)$', cell_addr)
-                    if match:
-                        col_letter, row_num = match.groups()
-                        row_num = int(row_num)
-                        col_idx = 0
-                        for i, c in enumerate(reversed(col_letter)):
-                            col_idx += (ord(c) - ord('A') + 1) * (26 ** i)
-                        col_idx -= 1
-                        if row_num <= 30 and col_idx < 15:
-                            limited_text_values[cell_addr] = text
-                sheet_data["text_values"] = limited_text_values
+                sheet_data["text_values"] = s.text_values
         
         # Include full cell types for grid view if requested
         if include_cells and hasattr(s, 'cell_types') and s.cell_types:
-            limited_cell_types = {}
-            for cell_addr, cell_type in s.cell_types.items():
-                match = re.match(r'^([A-Z]+)(\d+)$', cell_addr)
-                if match:
-                    col_letter, row_num = match.groups()
-                    row_num = int(row_num)
-                    # Calculate column index
-                    col_idx = 0
-                    for i, c in enumerate(reversed(col_letter)):
-                        col_idx += (ord(c) - ord('A') + 1) * (26 ** i)
-                    col_idx -= 1
-                    
-                    if row_num <= 30 and col_idx < 15:
-                        limited_cell_types[cell_addr] = cell_type
-            
-            sheet_data["cell_types"] = limited_cell_types
+            sheet_data["cell_types"] = s.cell_types
         
         result["structures"][name] = sheet_data
     

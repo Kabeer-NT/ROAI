@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react'
-import { X, Table, FileSpreadsheet, Hash, Type, Calculator, Grid, Eye, EyeOff, Shield } from 'lucide-react'
+import { X, Table, FileSpreadsheet, Hash, Type, Calculator, Grid, Eye, EyeOff, Shield, Maximize2, Minimize2 } from 'lucide-react'
 import { useAuth } from '../hooks'
 
 interface SheetStructure {
   rows: number
   cols: number
-  headers: Record<string, string>  // cell_addr -> header text
-  row_labels: Record<string, string>  // cell_addr -> label text
-  text_values?: Record<string, string>  // cell_addr -> ALL text values
+  headers: Record<string, string>
+  row_labels: Record<string, string>
+  text_values?: Record<string, string>
   formulas: Record<string, string>
   cell_type_counts: Record<string, number>
-  cell_types?: Record<string, string>  // cell_addr -> type
+  cell_types?: Record<string, string>
 }
 
 interface StructureData {
@@ -53,58 +53,74 @@ export function StructureViewer({ fileId, filename, isOpen, onClose }: Structure
     }
   }, [isOpen, fileId, token])
 
+  // Handle escape key to close
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = ''
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const currentSheet = structure?.structures?.[activeSheet]
 
   return (
-    <div className="structure-viewer-overlay" onClick={onClose}>
-      <div className="structure-viewer" onClick={e => e.stopPropagation()}>
-        <div className="structure-viewer-header">
-          <div className="structure-viewer-title">
-            <Shield size={20} className="shield-icon" />
-            <span>What AI Sees: {filename}</span>
-          </div>
-          <div className="structure-viewer-actions">
-            <div className="view-mode-toggle">
-              <button 
-                className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                onClick={() => setViewMode('grid')}
-                title="Grid View"
-              >
-                <Grid size={16} />
-              </button>
-              <button 
-                className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
-                onClick={() => setViewMode('summary')}
-                title="Summary View"
-              >
-                <Type size={16} />
-              </button>
-            </div>
-            <button className="structure-viewer-close" onClick={onClose}>
-              <X size={20} />
+    <div className="structure-viewer-fullscreen">
+      <div className="structure-viewer-header">
+        <div className="structure-viewer-title">
+          <Shield size={20} className="shield-icon" />
+          <span>What AI Sees: {filename}</span>
+        </div>
+        
+        <div className="structure-tabs-inline">
+          {structure?.structures && Object.keys(structure.structures).map(sheetName => (
+            <button
+              key={sheetName}
+              className={`structure-tab ${activeSheet === sheetName ? 'active' : ''}`}
+              onClick={() => setActiveSheet(sheetName)}
+            >
+              <Table size={14} />
+              {sheetName}
             </button>
-          </div>
+          ))}
         </div>
 
+        <div className="structure-viewer-actions">
+          <div className="view-mode-toggle">
+            <button 
+              className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid View"
+            >
+              <Grid size={16} />
+            </button>
+            <button 
+              className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
+              onClick={() => setViewMode('summary')}
+              title="Summary View"
+            >
+              <Type size={16} />
+            </button>
+          </div>
+          <button className="structure-viewer-close" onClick={onClose} title="Close (Esc)">
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      <div className="structure-viewer-body">
         {loading ? (
           <div className="structure-viewer-loading">Loading structure...</div>
         ) : structure?.structures ? (
           <>
-            <div className="structure-tabs">
-              {Object.keys(structure.structures).map(sheetName => (
-                <button
-                  key={sheetName}
-                  className={`structure-tab ${activeSheet === sheetName ? 'active' : ''}`}
-                  onClick={() => setActiveSheet(sheetName)}
-                >
-                  <Table size={14} />
-                  {sheetName}
-                </button>
-              ))}
-            </div>
-
             {currentSheet && viewMode === 'grid' && (
               <GridView sheet={currentSheet} sheetName={activeSheet} />
             )}
@@ -112,42 +128,41 @@ export function StructureViewer({ fileId, filename, isOpen, onClose }: Structure
             {currentSheet && viewMode === 'summary' && (
               <SummaryView sheet={currentSheet} />
             )}
-
-            <div className="structure-legend">
-              <div className="legend-title"><Shield size={14} /> Cell Type Legend</div>
-              <div className="legend-items">
-                <div className="legend-item">
-                  <span className="legend-dot text" />
-                  <span>Text (visible)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot numeric" />
-                  <span>Numeric (hidden)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot formula" />
-                  <span>Formula (visible)</span>
-                </div>
-                <div className="legend-item">
-                  <span className="legend-dot empty" />
-                  <span>Empty</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="structure-note security-note">
-              <EyeOff size={16} />
-              <div>
-                <strong>Privacy Protection:</strong> Numeric values are completely hidden from the AI. 
-                It can only see text labels, column headers, and formula structures — never your actual numbers.
-              </div>
-            </div>
           </>
         ) : (
           <div className="structure-viewer-error">
             Could not load structure. Try re-uploading the file.
           </div>
         )}
+      </div>
+
+      <div className="structure-viewer-footer">
+        <div className="structure-legend">
+          <div className="legend-title"><Shield size={14} /> Cell Types:</div>
+          <div className="legend-items">
+            <div className="legend-item">
+              <span className="legend-dot text" />
+              <span>Text (visible)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-dot numeric" />
+              <span>Numeric (hidden)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-dot formula" />
+              <span>Formula (visible)</span>
+            </div>
+            <div className="legend-item">
+              <span className="legend-dot empty" />
+              <span>Empty</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="security-badge">
+          <EyeOff size={14} />
+          <span>Numeric values hidden from AI</span>
+        </div>
       </div>
     </div>
   )
@@ -158,16 +173,17 @@ interface GridViewProps {
   sheetName: string
 }
 
-function GridView({ sheet, sheetName }: GridViewProps) {
-  const maxDisplayRows = Math.min(sheet.rows, 30)
-  const maxDisplayCols = Math.min(sheet.cols, 15)
+function GridView({ sheet }: GridViewProps) {
+  // Show ALL rows and columns
+  const maxDisplayRows = sheet.rows
+  const maxDisplayCols = sheet.cols
 
-  // Build grid data
   const getColumnLetter = (idx: number): string => {
     let letter = ''
-    while (idx >= 0) {
-      letter = String.fromCharCode(65 + (idx % 26)) + letter
-      idx = Math.floor(idx / 26) - 1
+    let n = idx
+    while (n >= 0) {
+      letter = String.fromCharCode(65 + (n % 26)) + letter
+      n = Math.floor(n / 26) - 1
     }
     return letter
   }
@@ -175,31 +191,25 @@ function GridView({ sheet, sheetName }: GridViewProps) {
   const getCellContent = (row: number, col: number): { type: string; content: string } => {
     const cellAddr = `${getColumnLetter(col)}${row + 1}`
     
-    // Check if it's a header (from headers dict)
     if (sheet.headers && sheet.headers[cellAddr]) {
       return { type: 'header', content: sheet.headers[cellAddr] }
     }
     
-    // Check if it's a formula
     if (sheet.formulas && sheet.formulas[cellAddr]) {
       return { type: 'formula', content: sheet.formulas[cellAddr] }
     }
     
-    // Check cell type from cell_types if available
     if (sheet.cell_types?.[cellAddr]) {
       const cellType = sheet.cell_types[cellAddr]
       if (cellType === 'numeric') {
-        return { type: 'numeric', content: '•••' }
+        return { type: 'numeric', content: '' }
       } else if (cellType === 'empty') {
         return { type: 'empty', content: '' }
       } else if (cellType === 'text') {
-        // Get actual text value if available
         const textValue = sheet.text_values?.[cellAddr] || sheet.row_labels?.[cellAddr]
-        return { type: 'text', content: textValue || '(text)' }
-      } else if (cellType === 'header') {
-        return { type: 'header', content: sheet.headers?.[cellAddr] || '(header)' }
+        return { type: 'text', content: textValue || '' }
       } else if (cellType === 'formula') {
-        return { type: 'formula', content: sheet.formulas?.[cellAddr] || 'ƒx' }
+        return { type: 'formula', content: sheet.formulas?.[cellAddr] || '' }
       }
     }
     
@@ -207,16 +217,15 @@ function GridView({ sheet, sheetName }: GridViewProps) {
   }
 
   return (
-    <div className="grid-view-container">
+    <div className="grid-view-fullscreen">
       <div className="grid-view-scroll">
         <table className="structure-grid">
           <thead>
             <tr>
-              <th className="row-header"></th>
+              <th className="row-header corner"></th>
               {Array.from({ length: maxDisplayCols }, (_, i) => (
                 <th key={i} className="col-header">{getColumnLetter(i)}</th>
               ))}
-              {sheet.cols > maxDisplayCols && <th className="col-header more">...</th>}
             </tr>
           </thead>
           <tbody>
@@ -229,38 +238,27 @@ function GridView({ sheet, sheetName }: GridViewProps) {
                     <td 
                       key={colIdx} 
                       className={`grid-cell ${type}`}
-                      title={`${getColumnLetter(colIdx)}${rowIdx + 1}: ${type}${content ? ` - ${content}` : ''}`}
+                      title={`${getColumnLetter(colIdx)}${rowIdx + 1}${content ? `: ${content}` : ''}`}
                     >
                       <div className="cell-content">
                         {type === 'numeric' ? (
-                          <span className="hidden-value">
-                            <EyeOff size={12} />
-                          </span>
+                          <EyeOff size={10} className="hidden-icon" />
                         ) : type === 'formula' ? (
-                          <span className="formula-indicator" title={content}>ƒx</span>
-                        ) : (
-                          <span className="cell-text">{content.slice(0, 15)}{content.length > 15 ? '…' : ''}</span>
-                        )}
+                          <span className="formula-indicator">ƒx</span>
+                        ) : content ? (
+                          <span className="cell-text">{content}</span>
+                        ) : null}
                       </div>
                     </td>
                   )
                 })}
-                {sheet.cols > maxDisplayCols && <td className="grid-cell more">...</td>}
               </tr>
             ))}
-            {sheet.rows > maxDisplayRows && (
-              <tr>
-                <td className="row-header">...</td>
-                {Array.from({ length: maxDisplayCols + (sheet.cols > maxDisplayCols ? 1 : 0) }, (_, i) => (
-                  <td key={i} className="grid-cell more">...</td>
-                ))}
-              </tr>
-            )}
           </tbody>
         </table>
       </div>
       <div className="grid-info">
-        Showing {maxDisplayRows} of {sheet.rows} rows, {maxDisplayCols} of {sheet.cols} columns
+        {sheet.rows} rows × {sheet.cols} columns
       </div>
     </div>
   )
@@ -271,88 +269,93 @@ interface SummaryViewProps {
 }
 
 function SummaryView({ sheet }: SummaryViewProps) {
-  // Convert headers object to array for display
   const headersArray = Object.entries(sheet.headers || {}).sort((a, b) => {
-    // Sort by cell address
     const colA = a[0].replace(/\d+/g, '')
     const colB = b[0].replace(/\d+/g, '')
     return colA.localeCompare(colB)
   })
 
-  const rowLabelsArray = Object.entries(sheet.row_labels || {}).slice(0, 15)
+  const rowLabelsArray = Object.entries(sheet.row_labels || {}).slice(0, 30)
 
   return (
-    <div className="structure-content">
-      <div className="structure-meta">
-        <span className="meta-item">
-          <Hash size={14} />
-          {sheet.rows} rows × {sheet.cols} cols
-        </span>
-      </div>
-
-      <div className="structure-section">
-        <h4><Type size={14} /> Headers (Column Names)</h4>
-        <div className="structure-tags">
-          {headersArray.length > 0 ? (
-            headersArray.map(([cell, header]) => (
-              <span key={cell} className="structure-tag header-tag">
-                <span className="tag-col">{cell}:</span> {header}
-              </span>
-            ))
-          ) : (
-            <span className="no-data">No headers detected</span>
-          )}
-        </div>
-      </div>
-
-      {rowLabelsArray.length > 0 && (
-        <div className="structure-section">
-          <h4><Table size={14} /> Row Labels</h4>
-          <div className="structure-tags">
-            {rowLabelsArray.map(([cell, label]) => (
-              <span key={cell} className="structure-tag row-tag">
-                <span className="tag-row">{cell}:</span> {label}
-              </span>
-            ))}
-            {Object.keys(sheet.row_labels || {}).length > 15 && (
-              <span className="structure-tag more-tag">
-                +{Object.keys(sheet.row_labels || {}).length - 15} more
-              </span>
-            )}
+    <div className="summary-view-fullscreen">
+      <div className="summary-grid">
+        <div className="summary-card">
+          <h3><Hash size={16} /> Dimensions</h3>
+          <div className="summary-stat">
+            <span className="stat-value">{sheet.rows}</span>
+            <span className="stat-label">rows</span>
+          </div>
+          <div className="summary-stat">
+            <span className="stat-value">{sheet.cols}</span>
+            <span className="stat-label">columns</span>
           </div>
         </div>
-      )}
 
-      {Object.keys(sheet.formulas || {}).length > 0 && (
-        <div className="structure-section">
-          <h4><Calculator size={14} /> Formulas</h4>
-          <div className="structure-formulas">
-            {Object.entries(sheet.formulas).slice(0, 10).map(([cell, formula]) => (
-              <div key={cell} className="formula-item">
-                <span className="formula-cell">{cell}</span>
-                <code className="formula-code">{formula}</code>
-              </div>
-            ))}
-            {Object.keys(sheet.formulas).length > 10 && (
-              <div className="formula-item more">
-                +{Object.keys(sheet.formulas).length - 10} more formulas
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="structure-section">
-        <h4><Eye size={14} /> Cell Type Summary</h4>
-        <div className="cell-type-summary">
+        <div className="summary-card">
+          <h3><Eye size={16} /> Cell Types</h3>
           {Object.entries(sheet.cell_type_counts || {}).map(([type, count]) => (
-            <div key={type} className="cell-type-item">
+            <div key={type} className="cell-type-row">
               <span className={`cell-type-dot ${type}`} />
               <span className="cell-type-name">{type}</span>
               <span className="cell-type-count">{count}</span>
             </div>
           ))}
         </div>
+
+        <div className="summary-card wide">
+          <h3><Type size={16} /> Headers</h3>
+          <div className="tags-container">
+            {headersArray.length > 0 ? (
+              headersArray.map(([cell, header]) => (
+                <span key={cell} className="structure-tag header-tag">
+                  <span className="tag-cell">{cell}</span>
+                  {header}
+                </span>
+              ))
+            ) : (
+              <span className="no-data">No headers detected</span>
+            )}
+          </div>
+        </div>
+
+        {rowLabelsArray.length > 0 && (
+          <div className="summary-card wide">
+            <h3><Table size={16} /> Row Labels</h3>
+            <div className="tags-container">
+              {rowLabelsArray.map(([cell, label]) => (
+                <span key={cell} className="structure-tag row-tag">
+                  <span className="tag-cell">{cell}</span>
+                  {label}
+                </span>
+              ))}
+              {Object.keys(sheet.row_labels || {}).length > 30 && (
+                <span className="structure-tag more-tag">
+                  +{Object.keys(sheet.row_labels || {}).length - 30} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {Object.keys(sheet.formulas || {}).length > 0 && (
+          <div className="summary-card wide">
+            <h3><Calculator size={16} /> Formulas</h3>
+            <div className="formulas-list">
+              {Object.entries(sheet.formulas).slice(0, 20).map(([cell, formula]) => (
+                <div key={cell} className="formula-row">
+                  <span className="formula-cell">{cell}</span>
+                  <code className="formula-code">{formula}</code>
+                </div>
+              ))}
+              {Object.keys(sheet.formulas).length > 20 && (
+                <div className="formula-row more">
+                  +{Object.keys(sheet.formulas).length - 20} more formulas
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
