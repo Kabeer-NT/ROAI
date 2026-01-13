@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Message, SpreadsheetFile, ConnectionStatus, ToolCall } from '../types'
+import type { Message, SpreadsheetFile, ToolCall } from '../types'
 import { useAuth } from './useAuth'
 
 export { useAuth, AuthProvider } from './useAuth'
@@ -10,24 +10,20 @@ export type { FileHandleEntry } from './useFileHandle'
 export function useModels() {
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState('')
-  const [status, setStatus] = useState<ConnectionStatus>('checking')
 
   useEffect(() => {
     fetch('/api/models')
       .then(res => res.json())
       .then(data => {
-        if (data.error) {
-          setStatus('error')
-        } else {
+        if (!data.error) {
           setModels(data.models)
           setSelectedModel(data.default)
-          setStatus('connected')
         }
       })
-      .catch(() => setStatus('error'))
+      .catch(() => {})
   }, [])
 
-  return { models, selectedModel, setSelectedModel, status }
+  return { models, selectedModel, setSelectedModel }
 }
 
 export function useSpreadsheets() {

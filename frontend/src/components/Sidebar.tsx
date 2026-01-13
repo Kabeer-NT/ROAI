@@ -1,13 +1,13 @@
-import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Wifi, WifiOff, Loader2, Sun, Moon } from 'lucide-react'
-import type { SpreadsheetFile, ConnectionStatus } from '../types'
+import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react'
+import type { SpreadsheetFile } from '../types'
 import { FileCard } from './FileCard'
 import { DropZone } from './DropZone'
+import { ModelSelector } from './ModelSelector'
 import { useAuth } from '../hooks'
 
 interface SidebarProps {
   isOpen: boolean
   onToggle: () => void
-  status: ConnectionStatus
   models: string[]
   selectedModel: string
   onModelChange: (model: string) => void
@@ -24,7 +24,6 @@ interface SidebarProps {
 export function Sidebar({
   isOpen,
   onToggle,
-  status,
   models,
   selectedModel,
   onModelChange,
@@ -38,17 +37,6 @@ export function Sidebar({
   onThemeToggle,
 }: SidebarProps) {
   const { user, logout } = useAuth()
-
-  const StatusIcon = () => {
-    switch (status) {
-      case 'connected':
-        return <Wifi size={14} className="status-icon connected" />
-      case 'error':
-        return <WifiOff size={14} className="status-icon error" />
-      default:
-        return <Loader2 size={14} className="status-icon spinning" />
-    }
-  }
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
@@ -80,33 +68,12 @@ export function Sidebar({
           </div>
 
           <div className="sidebar-section">
-            <div className="section-label">Connection</div>
-            <div className={`connection-status ${status}`}>
-              <StatusIcon />
-              <span>
-                {status === 'connected' && 'Connected'}
-                {status === 'error' && 'Disconnected'}
-                {status === 'checking' && 'Checking...'}
-              </span>
-            </div>
-          </div>
-
-          <div className="sidebar-section">
             <div className="section-label">Model</div>
-            <select
-              value={selectedModel}
-              onChange={e => onModelChange(e.target.value)}
-              className="model-dropdown"
-              disabled={models.length === 0}
-            >
-              {models.length === 0 ? (
-                <option>No models</option>
-              ) : (
-                models.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))
-              )}
-            </select>
+            <ModelSelector
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+            />
           </div>
 
           {onThemeToggle && (

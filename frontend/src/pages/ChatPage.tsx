@@ -13,7 +13,7 @@ export function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { theme, toggleTheme } = useTheme()
-  const { models, selectedModel, setSelectedModel, status } = useModels()
+  const { models, selectedModel, setSelectedModel } = useModels()
   const { files, isUploading, uploadFile, reuploadFile, removeFile } = useSpreadsheets()
   const { messages, isLoading, sendMessage, addSystemMessage } = useChat(selectedModel, files)
 
@@ -130,7 +130,6 @@ export function ChatPage() {
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        status={status}
         models={models}
         selectedModel={selectedModel}
         onModelChange={setSelectedModel}
@@ -163,7 +162,7 @@ export function ChatPage() {
           onSend={sendMessage}
           onFilesAdd={handleFilesAdd}
           onFilePickerOpen={fileSystemSupported ? handleFilesAddWithHandle : undefined}
-          disabled={isLoading || status === 'error'}
+          disabled={isLoading}
           placeholder={placeholder}
         />
       </main>

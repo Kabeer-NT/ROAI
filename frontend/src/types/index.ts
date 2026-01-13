@@ -45,5 +45,3 @@ export interface SpreadsheetFile {
   uploadedAt: Date
   hasHandle?: boolean
 }
-
-export type ConnectionStatus = 'checking' | 'connected' | 'error'
