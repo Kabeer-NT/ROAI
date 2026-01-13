@@ -4,6 +4,7 @@ import { useAuth } from './useAuth'
 
 export { useAuth, AuthProvider } from './useAuth'
 export { useFileHandle } from './useFileHandle'
+export { useTheme } from './useTheme'
 export type { FileHandleEntry } from './useFileHandle'
 
 export function useModels() {
@@ -159,7 +160,6 @@ export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
         throw new Error(data.detail || 'Request failed')
       }
       
-      // Parse tool_calls from response
       const toolCalls: ToolCall[] = data.tool_calls || []
       
       const assistantMessage: Message = {

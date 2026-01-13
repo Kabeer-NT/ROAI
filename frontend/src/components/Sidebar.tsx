@@ -1,4 +1,4 @@
-import { LogOut, User, RefreshCw } from 'lucide-react'
+import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Wifi, WifiOff, Loader2, Sun, Moon } from 'lucide-react'
 import type { SpreadsheetFile, ConnectionStatus } from '../types'
 import { FileCard } from './FileCard'
 import { DropZone } from './DropZone'
@@ -17,6 +17,8 @@ interface SidebarProps {
   onFilePickerOpen?: () => Promise<boolean>
   isUploading: boolean
   isReloading?: boolean
+  theme?: 'light' | 'dark'
+  onThemeToggle?: () => void
 }
 
 export function Sidebar({
@@ -32,18 +34,31 @@ export function Sidebar({
   onFilePickerOpen,
   isUploading,
   isReloading,
+  theme = 'dark',
+  onThemeToggle,
 }: SidebarProps) {
   const { user, logout } = useAuth()
+
+  const StatusIcon = () => {
+    switch (status) {
+      case 'connected':
+        return <Wifi size={14} className="status-icon connected" />
+      case 'error':
+        return <WifiOff size={14} className="status-icon error" />
+      default:
+        return <Loader2 size={14} className="status-icon spinning" />
+    }
+  }
 
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
         <div className="logo">
-          <span className="logo-icon">◈</span>
+          <Hexagon className="logo-icon" size={24} />
           {isOpen && <span className="logo-text">R-O-AI</span>}
         </div>
         <button className="sidebar-toggle" onClick={onToggle}>
-          {isOpen ? '‹' : '›'}
+          {isOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
       </div>
 
@@ -67,9 +82,9 @@ export function Sidebar({
           <div className="sidebar-section">
             <div className="section-label">Connection</div>
             <div className={`connection-status ${status}`}>
-              <span className="status-dot" />
+              <StatusIcon />
               <span>
-                {status === 'connected' && 'Ollama Connected'}
+                {status === 'connected' && 'Connected'}
                 {status === 'error' && 'Disconnected'}
                 {status === 'checking' && 'Checking...'}
               </span>
@@ -94,12 +109,25 @@ export function Sidebar({
             </select>
           </div>
 
+          {onThemeToggle && (
+            <div className="sidebar-section">
+              <div className="section-label">Appearance</div>
+              <button className="theme-toggle" onClick={onThemeToggle}>
+                <span className="theme-toggle-label">
+                  {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+                  <span>{theme === 'dark' ? 'Dark' : 'Light'} Mode</span>
+                </span>
+                <div className="theme-toggle-switch" />
+              </button>
+            </div>
+          )}
+
           <div className="sidebar-section">
             <div className="section-label">
               Data Sources
               {files.length > 0 && <span className="count">{files.length}</span>}
               {isReloading && (
-                <RefreshCw size={12} className="reloading-icon" />
+                <RefreshCw size={12} className="reloading-icon spinning" />
               )}
             </div>
             <DropZone 
