@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Table, Hash, Type, Calculator, Grid, Eye, EyeOff, Shield, RotateCcw } from 'lucide-react'
 import { useAuth } from '../hooks'
 
@@ -12,6 +12,7 @@ interface SheetStructure {
   headers: Record<string, string>
   row_labels: Record<string, string>
   text_values?: Record<string, string>
+  numeric_values?: Record<string, number>  // NEW: for showing whitelisted numbers
   formulas: Record<string, string>
   cell_type_counts: Record<string, number>
   cell_types?: Record<string, string>
@@ -23,14 +24,15 @@ interface StructureData {
   structures: Record<string, SheetStructure>
 }
 
-// Sheet-scoped visibility state
 export interface SheetVisibilityState {
-  hiddenColumns: Set<string>  // Column letters: "A", "B", "C"
-  hiddenRows: Set<number>     // Row numbers: 1, 2, 3
-  hiddenCells: Set<string>    // Individual cells: "A1", "B2"
+  hiddenColumns: Set<string>
+  hiddenRows: Set<number>
+  hiddenCells: Set<string>
+  visibleColumns: Set<string>
+  visibleRows: Set<number>
+  visibleCells: Set<string>
 }
 
-// File visibility state - organized by sheet name
 export interface FileVisibilityState {
   [sheetName: string]: SheetVisibilityState
 }
@@ -40,10 +42,8 @@ interface StructureViewerProps {
   filename: string
   isOpen: boolean
   onClose: () => void
-  // NEW: Sheet-scoped visibility
   fileVisibility?: FileVisibilityState
   onFileVisibilityChange?: (visibility: FileVisibilityState) => void
-  // DEPRECATED: Legacy props for backward compatibility
   visibility?: SheetVisibilityState
   onVisibilityChange?: (visibility: SheetVisibilityState) => void
 }
@@ -51,7 +51,7 @@ interface StructureViewerProps {
 type ViewMode = 'summary' | 'grid'
 
 // ============================================================================
-// Helper Functions
+// Helpers
 // ============================================================================
 
 function createEmptySheetVisibility(): SheetVisibilityState {
@@ -59,6 +59,20 @@ function createEmptySheetVisibility(): SheetVisibilityState {
     hiddenColumns: new Set(),
     hiddenRows: new Set(),
     hiddenCells: new Set(),
+    visibleColumns: new Set(),
+    visibleRows: new Set(),
+    visibleCells: new Set(),
+  }
+}
+
+function ensureFields(vis: Partial<SheetVisibilityState>): SheetVisibilityState {
+  return {
+    hiddenColumns: vis.hiddenColumns ?? new Set(),
+    hiddenRows: vis.hiddenRows ?? new Set(),
+    hiddenCells: vis.hiddenCells ?? new Set(),
+    visibleColumns: vis.visibleColumns ?? new Set(),
+    visibleRows: vis.visibleRows ?? new Set(),
+    visibleCells: vis.visibleCells ?? new Set(),
   }
 }
 
@@ -72,28 +86,28 @@ function getColumnLetter(idx: number): string {
   return letter
 }
 
-function isCellHidden(
-  cellAddr: string,
-  col: string,
-  row: number,
-  visibility: SheetVisibilityState
-): boolean {
-  if (visibility.hiddenCells.has(cellAddr)) return true
-  if (visibility.hiddenColumns.has(col)) return true
-  if (visibility.hiddenRows.has(row)) return true
-  return false
+function isUserHidden(cellAddr: string, col: string, row: number, vis: SheetVisibilityState): boolean {
+  return vis.hiddenCells?.has(cellAddr) || vis.hiddenColumns?.has(col) || vis.hiddenRows?.has(row)
 }
 
-function countSheetHidden(visibility: SheetVisibilityState): number {
-  return visibility.hiddenColumns.size + visibility.hiddenRows.size + visibility.hiddenCells.size
+function isWhitelisted(cellAddr: string, col: string, row: number, vis: SheetVisibilityState): boolean {
+  return vis.visibleCells?.has(cellAddr) || vis.visibleColumns?.has(col) || vis.visibleRows?.has(row)
 }
 
-function countFileHidden(fileVisibility: FileVisibilityState): number {
-  let total = 0
-  for (const sheetVis of Object.values(fileVisibility)) {
-    total += countSheetHidden(sheetVis)
-  }
-  return total
+function countHidden(vis: SheetVisibilityState): number {
+  return (vis.hiddenColumns?.size || 0) + (vis.hiddenRows?.size || 0) + (vis.hiddenCells?.size || 0)
+}
+
+function countVisible(vis: SheetVisibilityState): number {
+  return (vis.visibleColumns?.size || 0) + (vis.visibleRows?.size || 0) + (vis.visibleCells?.size || 0)
+}
+
+function countFileHidden(fv: FileVisibilityState): number {
+  return Object.values(fv).reduce((t, s) => t + countHidden(s), 0)
+}
+
+function countFileVisible(fv: FileVisibilityState): number {
+  return Object.values(fv).reduce((t, s) => t + countVisible(s), 0)
 }
 
 // ============================================================================
@@ -101,14 +115,9 @@ function countFileHidden(fileVisibility: FileVisibilityState): number {
 // ============================================================================
 
 export function StructureViewer({ 
-  fileId, 
-  filename, 
-  isOpen, 
-  onClose,
-  // New sheet-scoped props
+  fileId, filename, isOpen, onClose,
   fileVisibility: externalFileVisibility,
   onFileVisibilityChange,
-  // Legacy props (backward compatibility)
   visibility: legacyVisibility,
   onVisibilityChange: legacyOnVisibilityChange,
 }: StructureViewerProps) {
@@ -117,128 +126,125 @@ export function StructureViewer({
   const [loading, setLoading] = useState(false)
   const [activeSheet, setActiveSheet] = useState<string>('')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
-  
-  // Internal file visibility state
   const [internalFileVisibility, setInternalFileVisibility] = useState<FileVisibilityState>({})
   
-  // Determine which visibility system to use
   const isUsingNewSystem = !!onFileVisibilityChange
-  
-  // Get file visibility (use external if provided, otherwise internal)
   const fileVisibility = externalFileVisibility ?? internalFileVisibility
   
-  // Get current sheet visibility
-  const currentSheetVisibility = activeSheet 
-    ? (fileVisibility[activeSheet] ?? createEmptySheetVisibility())
-    : (legacyVisibility ?? createEmptySheetVisibility())
+  const currentSheetVisibility: SheetVisibilityState = activeSheet 
+    ? ensureFields(fileVisibility[activeSheet] ?? {})
+    : ensureFields(legacyVisibility ?? {})
   
-  // Update visibility for current sheet
-  const setCurrentSheetVisibility = useCallback((newVisibility: SheetVisibilityState) => {
+  const setCurrentSheetVisibility = useCallback((newVis: SheetVisibilityState) => {
     if (isUsingNewSystem && activeSheet) {
-      // New system: update sheet within file visibility
-      const newFileVisibility = { ...fileVisibility, [activeSheet]: newVisibility }
-      if (onFileVisibilityChange) {
-        onFileVisibilityChange(newFileVisibility)
-      } else {
-        setInternalFileVisibility(newFileVisibility)
-      }
+      const newFileVis = { ...fileVisibility, [activeSheet]: newVis }
+      onFileVisibilityChange ? onFileVisibilityChange(newFileVis) : setInternalFileVisibility(newFileVis)
     } else if (legacyOnVisibilityChange) {
-      // Legacy system: just update the flat visibility
-      legacyOnVisibilityChange(newVisibility)
-    } else {
-      // Fallback to internal state
-      if (activeSheet) {
-        setInternalFileVisibility(prev => ({ ...prev, [activeSheet]: newVisibility }))
-      }
+      legacyOnVisibilityChange(newVis)
+    } else if (activeSheet) {
+      setInternalFileVisibility(prev => ({ ...prev, [activeSheet]: newVis }))
     }
   }, [activeSheet, fileVisibility, isUsingNewSystem, onFileVisibilityChange, legacyOnVisibilityChange])
 
-  // Fetch structure data
   useEffect(() => {
     if (isOpen && fileId && token) {
       setLoading(true)
-      fetch(`/api/spreadsheet/${fileId}/structure?include_cells=true`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      fetch(`/api/spreadsheet/${fileId}/structure?include_cells=true`, { headers: { 'Authorization': `Bearer ${token}` } })
         .then(res => res.json())
-        .then(data => {
-          setStructure(data)
-          if (data.structures) {
-            const sheetNames = Object.keys(data.structures)
-            setActiveSheet(sheetNames[0] || '')
-          }
-        })
+        .then(data => { setStructure(data); if (data.structures) setActiveSheet(Object.keys(data.structures)[0] || '') })
         .catch(console.error)
         .finally(() => setLoading(false))
     }
   }, [isOpen, fileId, token])
 
-  // Handle escape key to close
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape)
-      document.body.style.overflow = 'hidden'
-    }
-    return () => {
-      document.removeEventListener('keydown', handleEscape)
-      document.body.style.overflow = ''
-    }
+    const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    if (isOpen) { document.addEventListener('keydown', handleEscape); document.body.style.overflow = 'hidden' }
+    return () => { document.removeEventListener('keydown', handleEscape); document.body.style.overflow = '' }
   }, [isOpen, onClose])
 
-  // Toggle handlers - these now work on current sheet
+  // Toggle column: if hidden->unhide, if visible->remove from whitelist, else add to hidden
   const toggleColumn = useCallback((col: string) => {
-    const newHiddenColumns = new Set(currentSheetVisibility.hiddenColumns)
-    if (newHiddenColumns.has(col)) {
-      newHiddenColumns.delete(col)
+    const vis = currentSheetVisibility
+    const newHidden = new Set(vis.hiddenColumns)
+    const newVisible = new Set(vis.visibleColumns)
+    
+    if (newHidden.has(col)) {
+      newHidden.delete(col) // Unhide
+    } else if (newVisible.has(col)) {
+      newVisible.delete(col) // Remove from whitelist
     } else {
-      newHiddenColumns.add(col)
+      // Add to whitelist (to show numbers) - this is the "unhide default" action
+      newVisible.add(col)
     }
-    setCurrentSheetVisibility({
-      ...currentSheetVisibility,
-      hiddenColumns: newHiddenColumns,
-    })
+    setCurrentSheetVisibility({ ...vis, hiddenColumns: newHidden, visibleColumns: newVisible })
   }, [currentSheetVisibility, setCurrentSheetVisibility])
 
   const toggleRow = useCallback((row: number) => {
-    const newHiddenRows = new Set(currentSheetVisibility.hiddenRows)
-    if (newHiddenRows.has(row)) {
-      newHiddenRows.delete(row)
+    const vis = currentSheetVisibility
+    const newHidden = new Set(vis.hiddenRows)
+    const newVisible = new Set(vis.visibleRows)
+    
+    if (newHidden.has(row)) {
+      newHidden.delete(row)
+    } else if (newVisible.has(row)) {
+      newVisible.delete(row)
     } else {
-      newHiddenRows.add(row)
+      newVisible.add(row)
     }
-    setCurrentSheetVisibility({
-      ...currentSheetVisibility,
-      hiddenRows: newHiddenRows,
-    })
+    setCurrentSheetVisibility({ ...vis, hiddenRows: newHidden, visibleRows: newVisible })
   }, [currentSheetVisibility, setCurrentSheetVisibility])
 
-  const toggleCell = useCallback((cellAddr: string) => {
-    const newHiddenCells = new Set(currentSheetVisibility.hiddenCells)
-    if (newHiddenCells.has(cellAddr)) {
+  // Toggle cell based on current state and cell type
+  const toggleCell = useCallback((cellAddr: string, isNumeric: boolean) => {
+    const vis = currentSheetVisibility
+    const newHiddenCells = new Set(vis.hiddenCells)
+    const newVisibleCells = new Set(vis.visibleCells)
+    
+    const col = cellAddr.replace(/\d+/g, '')
+    const row = parseInt(cellAddr.replace(/[A-Z]+/g, ''))
+    const isHidden = isUserHidden(cellAddr, col, row, vis)
+    const isWL = isWhitelisted(cellAddr, col, row, vis)
+    
+    if (isHidden) {
+      // Currently extra-hidden -> unhide
       newHiddenCells.delete(cellAddr)
+    } else if (isWL) {
+      // Currently whitelisted -> remove from whitelist (re-hide numbers)
+      newVisibleCells.delete(cellAddr)
+    } else if (isNumeric) {
+      // Numeric cell, not in any list -> whitelist it (show the number)
+      newVisibleCells.add(cellAddr)
     } else {
+      // Text cell -> hide it
       newHiddenCells.add(cellAddr)
     }
-    setCurrentSheetVisibility({
-      ...currentSheetVisibility,
-      hiddenCells: newHiddenCells,
-    })
+    setCurrentSheetVisibility({ ...vis, hiddenCells: newHiddenCells, visibleCells: newVisibleCells })
   }, [currentSheetVisibility, setCurrentSheetVisibility])
 
-  const resetSheetVisibility = useCallback(() => {
-    setCurrentSheetVisibility(createEmptySheetVisibility())
-  }, [setCurrentSheetVisibility])
-
-  const resetAllVisibility = useCallback(() => {
-    if (isUsingNewSystem) {
-      if (onFileVisibilityChange) {
-        onFileVisibilityChange({})
+  // Bulk toggle for drag selection
+  const toggleCells = useCallback((cells: Array<{ addr: string; isNumeric: boolean }>, mode: 'show' | 'hide') => {
+    const vis = currentSheetVisibility
+    const newHiddenCells = new Set(vis.hiddenCells)
+    const newVisibleCells = new Set(vis.visibleCells)
+    
+    cells.forEach(({ addr, isNumeric }) => {
+      if (mode === 'show') {
+        newHiddenCells.delete(addr)
+        if (isNumeric) newVisibleCells.add(addr)
       } else {
-        setInternalFileVisibility({})
+        newVisibleCells.delete(addr)
+        if (!isNumeric) newHiddenCells.add(addr)
       }
+    })
+    setCurrentSheetVisibility({ ...vis, hiddenCells: newHiddenCells, visibleCells: newVisibleCells })
+  }, [currentSheetVisibility, setCurrentSheetVisibility])
+
+  const resetSheet = useCallback(() => setCurrentSheetVisibility(createEmptySheetVisibility()), [setCurrentSheetVisibility])
+  
+  const resetAll = useCallback(() => {
+    if (isUsingNewSystem) {
+      onFileVisibilityChange ? onFileVisibilityChange({}) : setInternalFileVisibility({})
     } else if (legacyOnVisibilityChange) {
       legacyOnVisibilityChange(createEmptySheetVisibility())
     }
@@ -247,10 +253,9 @@ export function StructureViewer({
   if (!isOpen) return null
 
   const currentSheet = structure?.structures?.[activeSheet]
-  const currentSheetHiddenCount = countSheetHidden(currentSheetVisibility)
-  const totalHiddenCount = isUsingNewSystem 
-    ? countFileHidden(fileVisibility)
-    : currentSheetHiddenCount
+  const sheetHidden = countHidden(currentSheetVisibility)
+  const sheetVisible = countVisible(currentSheetVisibility)
+  const totalChanges = isUsingNewSystem ? countFileHidden(fileVisibility) + countFileVisible(fileVisibility) : sheetHidden + sheetVisible
 
   return (
     <div className="structure-viewer-fullscreen">
@@ -262,21 +267,16 @@ export function StructureViewer({
         
         <div className="structure-tabs-inline">
           {structure?.structures && Object.keys(structure.structures).map(sheetName => {
-            const sheetHidden = isUsingNewSystem 
-              ? countSheetHidden(fileVisibility[sheetName] ?? createEmptySheetVisibility())
-              : 0
+            const sv = ensureFields(fileVisibility[sheetName] ?? {})
+            const h = countHidden(sv)
+            const v = countVisible(sv)
             return (
-              <button
-                key={sheetName}
-                className={`structure-tab ${activeSheet === sheetName ? 'active' : ''}`}
-                onClick={() => setActiveSheet(sheetName)}
-              >
-                <Table size={14} />
-                {sheetName}
-                {sheetHidden > 0 && (
-                  <span className="sheet-hidden-badge" title={`${sheetHidden} items hidden`}>
-                    <EyeOff size={10} />
-                    {sheetHidden}
+              <button key={sheetName} className={`structure-tab ${activeSheet === sheetName ? 'active' : ''}`} onClick={() => setActiveSheet(sheetName)}>
+                <Table size={14} />{sheetName}
+                {(h > 0 || v > 0) && (
+                  <span className="sheet-visibility-badges">
+                    {h > 0 && <span className="sheet-hidden-badge"><EyeOff size={10} />{h}</span>}
+                    {v > 0 && <span className="sheet-visible-badge"><Eye size={10} />{v}</span>}
                   </span>
                 )}
               </button>
@@ -285,54 +285,23 @@ export function StructureViewer({
         </div>
 
         <div className="structure-viewer-actions">
-          {currentSheetHiddenCount > 0 && (
-            <button 
-              className="reset-visibility-btn"
-              onClick={resetSheetVisibility}
-              title="Reset hidden items in this sheet"
-            >
-              <RotateCcw size={14} />
-              <span>Reset Sheet ({currentSheetHiddenCount})</span>
-            </button>
-          )}
-          {isUsingNewSystem && totalHiddenCount > currentSheetHiddenCount && (
-            <button 
-              className="reset-visibility-btn reset-all"
-              onClick={resetAllVisibility}
-              title="Reset all hidden items in all sheets"
-            >
-              <RotateCcw size={14} />
-              <span>Reset All ({totalHiddenCount})</span>
+          {(sheetHidden > 0 || sheetVisible > 0) && (
+            <button className="reset-visibility-btn" onClick={resetSheet} title="Reset this sheet">
+              <RotateCcw size={14} /><span>Reset Sheet</span>
             </button>
           )}
           <div className="view-mode-toggle">
-            <button 
-              className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-              onClick={() => setViewMode('grid')}
-              title="Grid view"
-            >
-              <Grid size={16} />
-            </button>
-            <button 
-              className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`}
-              onClick={() => setViewMode('summary')}
-              title="Summary view"
-            >
-              <Type size={16} />
-            </button>
+            <button className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16} /></button>
+            <button className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`} onClick={() => setViewMode('summary')}><Type size={16} /></button>
           </div>
-          <button className="structure-close-btn" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <button className="structure-close-btn" onClick={onClose}><X size={20} /></button>
         </div>
       </div>
 
       <div className="structure-viewer-body">
-        {loading ? (
-          <div className="structure-loading">Loading structure...</div>
-        ) : !currentSheet ? (
-          <div className="structure-error">Could not load structure</div>
-        ) : viewMode === 'grid' ? (
+        {loading ? <div className="structure-loading">Loading structure...</div>
+        : !currentSheet ? <div className="structure-error">Could not load structure</div>
+        : viewMode === 'grid' ? (
           <GridView 
             sheet={currentSheet} 
             sheetName={activeSheet}
@@ -340,20 +309,16 @@ export function StructureViewer({
             onToggleColumn={toggleColumn}
             onToggleRow={toggleRow}
             onToggleCell={toggleCell}
+            onToggleCells={toggleCells}
           />
-        ) : (
-          <SummaryView 
-            sheet={currentSheet} 
-            visibility={currentSheetVisibility}
-          />
-        )}
+        ) : <SummaryView sheet={currentSheet} visibility={currentSheetVisibility} />}
       </div>
     </div>
   )
 }
 
 // ============================================================================
-// Grid View Component
+// Grid View with Drag Selection
 // ============================================================================
 
 interface GridViewProps {
@@ -362,58 +327,102 @@ interface GridViewProps {
   visibility: SheetVisibilityState
   onToggleColumn: (col: string) => void
   onToggleRow: (row: number) => void
-  onToggleCell: (cellAddr: string) => void
+  onToggleCell: (cellAddr: string, isNumeric: boolean) => void
+  onToggleCells: (cells: Array<{ addr: string; isNumeric: boolean }>, mode: 'show' | 'hide') => void
 }
 
-function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, onToggleCell }: GridViewProps) {
-  const maxDisplayRows = Math.min(sheet.rows, 100)
-  const maxDisplayCols = Math.min(sheet.cols, 26)
+function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, onToggleCell, onToggleCells }: GridViewProps) {
+  const maxRows = Math.min(sheet.rows, 100)
+  const maxCols = Math.min(sheet.cols, 26)
+  
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragStart, setDragStart] = useState<{ col: number; row: number } | null>(null)
+  const [dragEnd, setDragEnd] = useState<{ col: number; row: number } | null>(null)
+  const [dragMode, setDragMode] = useState<'show' | 'hide'>('show')
 
-  const getCellContent = (rowIdx: number, colIdx: number): { type: string; content: string } => {
+  const getCellInfo = (rowIdx: number, colIdx: number): { type: string; content: string; isNumeric: boolean; numericValue?: number } => {
     const col = getColumnLetter(colIdx)
-    const cellAddr = `${col}${rowIdx + 1}`
-    
-    const cellType = sheet.cell_types?.[cellAddr] || 'empty'
-    
-    if (sheet.headers?.[cellAddr]) {
-      return { type: 'header', content: sheet.headers[cellAddr] }
+    const addr = `${col}${rowIdx + 1}`
+    const cellType = sheet.cell_types?.[addr] || 'empty'
+    if (sheet.headers?.[addr]) return { type: 'header', content: sheet.headers[addr], isNumeric: false }
+    if (sheet.row_labels?.[addr]) return { type: 'label', content: sheet.row_labels[addr], isNumeric: false }
+    if (sheet.formulas?.[addr]) return { type: 'formula', content: sheet.formulas[addr], isNumeric: false }
+    if (sheet.text_values?.[addr]) return { type: 'text', content: sheet.text_values[addr], isNumeric: false }
+    // Check for numeric value
+    const numericValue = sheet.numeric_values?.[addr]
+    if (cellType === 'numeric' || numericValue !== undefined) {
+      return { type: 'numeric', content: '', isNumeric: true, numericValue }
     }
-    if (sheet.row_labels?.[cellAddr]) {
-      return { type: 'label', content: sheet.row_labels[cellAddr] }
-    }
-    if (sheet.formulas?.[cellAddr]) {
-      return { type: 'formula', content: sheet.formulas[cellAddr] }
-    }
-    if (sheet.text_values?.[cellAddr]) {
-      return { type: 'text', content: sheet.text_values[cellAddr] }
-    }
-    
-    return { type: cellType, content: '' }
+    return { type: cellType, content: '', isNumeric: false }
   }
 
-  const handleColumnClick = (e: React.MouseEvent, col: string) => {
-    if (e.shiftKey) {
-      onToggleColumn(col)
+  const getSelectedCells = useCallback(() => {
+    if (!dragStart || !dragEnd) return []
+    const minCol = Math.min(dragStart.col, dragEnd.col), maxCol = Math.max(dragStart.col, dragEnd.col)
+    const minRow = Math.min(dragStart.row, dragEnd.row), maxRow = Math.max(dragStart.row, dragEnd.row)
+    const cells: Array<{ addr: string; isNumeric: boolean }> = []
+    for (let r = minRow; r <= maxRow; r++) {
+      for (let c = minCol; c <= maxCol; c++) {
+        const addr = `${getColumnLetter(c)}${r + 1}`
+        const info = getCellInfo(r, c)
+        cells.push({ addr, isNumeric: info.isNumeric })
+      }
     }
+    return cells
+  }, [dragStart, dragEnd, sheet])
+
+  const isInSelection = (colIdx: number, rowIdx: number) => {
+    if (!isDragging || !dragStart || !dragEnd) return false
+    const minCol = Math.min(dragStart.col, dragEnd.col), maxCol = Math.max(dragStart.col, dragEnd.col)
+    const minRow = Math.min(dragStart.row, dragEnd.row), maxRow = Math.max(dragStart.row, dragEnd.row)
+    return colIdx >= minCol && colIdx <= maxCol && rowIdx >= minRow && rowIdx <= maxRow
   }
 
-  const handleRowClick = (e: React.MouseEvent, row: number) => {
-    if (e.shiftKey) {
-      onToggleRow(row)
-    }
+  const handleMouseDown = (e: React.MouseEvent, colIdx: number, rowIdx: number) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const addr = `${getColumnLetter(colIdx)}${rowIdx + 1}`
+    const col = getColumnLetter(colIdx)
+    const info = getCellInfo(rowIdx, colIdx)
+    
+    // Determine mode: if cell is currently "shown" (whitelisted or text), we hide. Otherwise we show.
+    const isHidden = isUserHidden(addr, col, rowIdx + 1, visibility)
+    const isWL = isWhitelisted(addr, col, rowIdx + 1, visibility)
+    const isCurrentlyShown = isWL || (!info.isNumeric && !isHidden)
+    
+    setIsDragging(true)
+    setDragStart({ col: colIdx, row: rowIdx })
+    setDragEnd({ col: colIdx, row: rowIdx })
+    setDragMode(isCurrentlyShown ? 'hide' : 'show')
   }
 
-  const handleCellClick = (e: React.MouseEvent, cellAddr: string) => {
-    if (e.shiftKey) {
-      onToggleCell(cellAddr)
-    }
+  const handleMouseEnter = (colIdx: number, rowIdx: number) => {
+    if (isDragging) setDragEnd({ col: colIdx, row: rowIdx })
   }
+
+  const handleMouseUp = useCallback(() => {
+    if (isDragging) {
+      const cells = getSelectedCells()
+      if (cells.length === 1) {
+        onToggleCell(cells[0].addr, cells[0].isNumeric)
+      } else if (cells.length > 1) {
+        onToggleCells(cells, dragMode)
+      }
+      setIsDragging(false)
+      setDragStart(null)
+      setDragEnd(null)
+    }
+  }, [isDragging, getSelectedCells, dragMode, onToggleCell, onToggleCells])
+
+  useEffect(() => {
+    document.addEventListener('mouseup', handleMouseUp)
+    return () => document.removeEventListener('mouseup', handleMouseUp)
+  }, [handleMouseUp])
 
   return (
     <div className="grid-view-fullscreen">
       <div className="grid-instructions">
-        <EyeOff size={14} />
-        <span><strong>Shift+click</strong> on column headers, row numbers, or cells to hide them from AI</span>
+        <span>Click to toggle · Drag to select multiple · <Eye size={12} style={{color:'#22c55a'}}/> = shown to AI</span>
         <span className="sheet-indicator">Sheet: <strong>{sheetName}</strong></span>
       </div>
       <div className="grid-scroll-container">
@@ -421,17 +430,16 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
           <thead>
             <tr>
               <th className="corner-cell"></th>
-              {Array.from({ length: maxDisplayCols }, (_, idx) => {
-                const col = getColumnLetter(idx)
-                const isHidden = visibility.hiddenColumns.has(col)
+              {Array.from({ length: maxCols }, (_, i) => {
+                const col = getColumnLetter(i)
+                const isHidden = visibility.hiddenColumns?.has(col)
+                const isWL = visibility.visibleColumns?.has(col)
                 return (
-                  <th 
-                    key={idx} 
-                    className={`col-header clickable ${isHidden ? 'user-hidden' : ''}`}
-                    onClick={(e) => handleColumnClick(e, col)}
-                    title={isHidden ? `Shift+click to show column ${col}` : `Shift+click to hide column ${col}`}
-                  >
+                  <th key={i} className={`col-header clickable ${isHidden ? 'user-hidden' : ''} ${isWL ? 'user-visible' : ''}`}
+                    onClick={() => onToggleColumn(col)}
+                    title={`Column ${col}: Click to toggle`}>
                     <span className="col-letter">{col}</span>
+                    {isWL && <Eye size={10} className="visible-indicator" />}
                     {isHidden && <EyeOff size={10} className="hidden-indicator" />}
                   </th>
                 )
@@ -439,41 +447,49 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
             </tr>
           </thead>
           <tbody>
-            {Array.from({ length: maxDisplayRows }, (_, rowIdx) => {
+            {Array.from({ length: maxRows }, (_, rowIdx) => {
               const rowNum = rowIdx + 1
-              const isRowHidden = visibility.hiddenRows.has(rowNum)
+              const isRowHidden = visibility.hiddenRows?.has(rowNum)
+              const isRowWL = visibility.visibleRows?.has(rowNum)
               
               return (
-                <tr key={rowIdx} className={isRowHidden ? 'row-hidden' : ''}>
-                  <td 
-                    className={`row-header clickable ${isRowHidden ? 'user-hidden' : ''}`}
-                    onClick={(e) => handleRowClick(e, rowNum)}
-                    title={isRowHidden ? `Shift+click to show row ${rowNum}` : `Shift+click to hide row ${rowNum}`}
-                  >
+                <tr key={rowIdx} className={`${isRowHidden ? 'row-hidden' : ''} ${isRowWL ? 'row-visible' : ''}`}>
+                  <td className={`row-header clickable ${isRowHidden ? 'user-hidden' : ''} ${isRowWL ? 'user-visible' : ''}`}
+                    onClick={() => onToggleRow(rowNum)}
+                    title={`Row ${rowNum}: Click to toggle`}>
                     <span className="row-number">{rowNum}</span>
+                    {isRowWL && <Eye size={10} className="visible-indicator" />}
                     {isRowHidden && <EyeOff size={10} className="hidden-indicator" />}
                   </td>
-                  {Array.from({ length: maxDisplayCols }, (_, colIdx) => {
+                  {Array.from({ length: maxCols }, (_, colIdx) => {
                     const col = getColumnLetter(colIdx)
-                    const cellAddr = `${col}${rowNum}`
-                    const { type, content } = getCellContent(rowIdx, colIdx)
-                    const isCellUserHidden = isCellHidden(cellAddr, col, rowNum, visibility)
+                    const addr = `${col}${rowNum}`
+                    const { type, content, isNumeric, numericValue } = getCellInfo(rowIdx, colIdx)
+                    const isHidden = isUserHidden(addr, col, rowNum, visibility)
+                    const isWL = isWhitelisted(addr, col, rowNum, visibility)
+                    const inSel = isInSelection(colIdx, rowIdx)
+                    
+                    // Format numeric value for display
+                    const displayValue = numericValue !== undefined 
+                      ? numericValue.toLocaleString('en-US', { maximumFractionDigits: 2 })
+                      : null
                     
                     return (
-                      <td 
-                        key={colIdx} 
-                        className={`grid-cell ${type} ${isCellUserHidden ? 'user-hidden' : ''}`}
-                        onClick={(e) => handleCellClick(e, cellAddr)}
-                        title={
-                          isCellUserHidden 
-                            ? `${cellAddr}: Hidden from AI (Shift+click to show)` 
-                            : `${cellAddr}${content ? `: ${content}` : ''} (Shift+click to hide)`
-                        }
-                      >
+                      <td key={colIdx} 
+                        className={`grid-cell ${type} ${isHidden ? 'user-hidden' : ''} ${isWL ? 'user-visible' : ''} ${inSel ? 'in-selection' : ''}`}
+                        onMouseDown={(e) => handleMouseDown(e, colIdx, rowIdx)}
+                        onMouseEnter={() => handleMouseEnter(colIdx, rowIdx)}
+                        title={`${addr}: Click to toggle${isWL && displayValue ? ` (${displayValue})` : ''}`}>
                         <div className="cell-content">
-                          {isCellUserHidden ? (
+                          {isHidden ? (
                             <EyeOff size={10} className="hidden-icon user-hidden-icon" />
-                          ) : type === 'numeric' ? (
+                          ) : isWL && isNumeric ? (
+                            displayValue ? (
+                              <span className="cell-number-value">{displayValue}</span>
+                            ) : (
+                              <Eye size={10} className="visible-icon" />
+                            )
+                          ) : isNumeric ? (
                             <EyeOff size={10} className="hidden-icon" />
                           ) : type === 'formula' ? (
                             <span className="formula-indicator">ƒx</span>
@@ -492,18 +508,15 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
       </div>
       <div className="grid-info">
         {sheet.rows} rows × {sheet.cols} columns
-        {countSheetHidden(visibility) > 0 && (
-          <span className="hidden-count">
-            · {countSheetHidden(visibility)} items hidden from AI in this sheet
-          </span>
-        )}
+        {countHidden(visibility) > 0 && <span className="hidden-count"> · {countHidden(visibility)} extra hidden</span>}
+        {countVisible(visibility) > 0 && <span className="visible-count"> · {countVisible(visibility)} numbers shown</span>}
       </div>
     </div>
   )
 }
 
 // ============================================================================
-// Summary View Component
+// Summary View
 // ============================================================================
 
 interface SummaryViewProps {
@@ -512,86 +525,45 @@ interface SummaryViewProps {
 }
 
 function SummaryView({ sheet, visibility }: SummaryViewProps) {
-  const headersArray = Object.entries(sheet.headers || {}).sort((a, b) => {
-    const colA = a[0].replace(/\d+/g, '')
-    const colB = b[0].replace(/\d+/g, '')
-    return colA.localeCompare(colB)
-  })
-
+  const headersArray = Object.entries(sheet.headers || {}).sort((a, b) => a[0].replace(/\d+/g, '').localeCompare(b[0].replace(/\d+/g, '')))
   const rowLabelsArray = Object.entries(sheet.row_labels || {}).slice(0, 30)
-  const hiddenCount = countSheetHidden(visibility)
 
   return (
     <div className="summary-view-fullscreen">
       <div className="summary-grid">
         <div className="summary-card">
           <h3><Hash size={16} /> Dimensions</h3>
-          <div className="summary-stat">
-            <span className="stat-value">{sheet.rows}</span>
-            <span className="stat-label">rows</span>
-          </div>
-          <div className="summary-stat">
-            <span className="stat-value">{sheet.cols}</span>
-            <span className="stat-label">columns</span>
-          </div>
+          <div className="summary-stat"><span className="stat-value">{sheet.rows}</span><span className="stat-label">rows</span></div>
+          <div className="summary-stat"><span className="stat-value">{sheet.cols}</span><span className="stat-label">columns</span></div>
         </div>
 
-        {hiddenCount > 0 && (
-          <div className="summary-card hidden-summary">
-            <h3><EyeOff size={16} /> Hidden from AI (this sheet)</h3>
-            {visibility.hiddenColumns.size > 0 && (
-              <div className="hidden-item">
-                <span className="hidden-label">Columns:</span>
-                <span className="hidden-value">{[...visibility.hiddenColumns].sort().join(', ')}</span>
-              </div>
-            )}
-            {visibility.hiddenRows.size > 0 && (
-              <div className="hidden-item">
-                <span className="hidden-label">Rows:</span>
-                <span className="hidden-value">{[...visibility.hiddenRows].sort((a, b) => a - b).join(', ')}</span>
-              </div>
-            )}
-            {visibility.hiddenCells.size > 0 && (
-              <div className="hidden-item">
-                <span className="hidden-label">Cells:</span>
-                <span className="hidden-value">{[...visibility.hiddenCells].sort().join(', ')}</span>
-              </div>
-            )}
+        {(countHidden(visibility) > 0 || countVisible(visibility) > 0) && (
+          <div className="summary-card visibility-summary">
+            <h3><Shield size={16} /> Privacy Changes</h3>
+            {visibility.hiddenColumns?.size > 0 && <div className="vis-item"><EyeOff size={12} /><span>Hidden cols: {[...visibility.hiddenColumns].sort().join(', ')}</span></div>}
+            {visibility.hiddenRows?.size > 0 && <div className="vis-item"><EyeOff size={12} /><span>Hidden rows: {[...visibility.hiddenRows].sort((a,b)=>a-b).join(', ')}</span></div>}
+            {visibility.hiddenCells?.size > 0 && <div className="vis-item"><EyeOff size={12} /><span>Hidden cells: {[...visibility.hiddenCells].sort().join(', ')}</span></div>}
+            {visibility.visibleColumns?.size > 0 && <div className="vis-item visible"><Eye size={12} /><span>Shown cols: {[...visibility.visibleColumns].sort().join(', ')}</span></div>}
+            {visibility.visibleRows?.size > 0 && <div className="vis-item visible"><Eye size={12} /><span>Shown rows: {[...visibility.visibleRows].sort((a,b)=>a-b).join(', ')}</span></div>}
+            {visibility.visibleCells?.size > 0 && <div className="vis-item visible"><Eye size={12} /><span>Shown cells: {[...visibility.visibleCells].sort().join(', ')}</span></div>}
           </div>
         )}
 
         <div className="summary-card">
           <h3><Eye size={16} /> Cell Types</h3>
           {Object.entries(sheet.cell_type_counts || {}).map(([type, count]) => (
-            <div key={type} className="cell-type-row">
-              <span className={`cell-type-dot ${type}`} />
-              <span className="cell-type-name">{type}</span>
-              <span className="cell-type-count">{count}</span>
-            </div>
+            <div key={type} className="cell-type-row"><span className={`cell-type-dot ${type}`} /><span className="cell-type-name">{type}</span><span className="cell-type-count">{count}</span></div>
           ))}
         </div>
 
         <div className="summary-card wide">
           <h3><Type size={16} /> Headers</h3>
           <div className="tags-container">
-            {headersArray.length > 0 ? (
-              headersArray.map(([cell, header]) => {
-                const col = cell.replace(/\d+/g, '')
-                const row = parseInt(cell.replace(/[A-Z]+/g, ''))
-                const isHidden = isCellHidden(cell, col, row, visibility)
-                return (
-                  <span 
-                    key={cell} 
-                    className={`structure-tag header-tag ${isHidden ? 'user-hidden' : ''}`}
-                  >
-                    <span className="tag-cell">{cell}</span>
-                    {isHidden ? <EyeOff size={10} /> : header}
-                  </span>
-                )
-              })
-            ) : (
-              <span className="no-data">No headers detected</span>
-            )}
+            {headersArray.length > 0 ? headersArray.map(([cell, header]) => {
+              const col = cell.replace(/\d+/g, ''), row = parseInt(cell.replace(/[A-Z]+/g, ''))
+              const hidden = isUserHidden(cell, col, row, visibility)
+              return <span key={cell} className={`structure-tag header-tag ${hidden ? 'user-hidden' : ''}`}><span className="tag-cell">{cell}</span>{hidden ? <EyeOff size={10} /> : header}</span>
+            }) : <span className="no-data">No headers detected</span>}
           </div>
         </div>
 
@@ -600,24 +572,10 @@ function SummaryView({ sheet, visibility }: SummaryViewProps) {
             <h3><Table size={16} /> Row Labels</h3>
             <div className="tags-container">
               {rowLabelsArray.map(([cell, label]) => {
-                const col = cell.replace(/\d+/g, '')
-                const row = parseInt(cell.replace(/[A-Z]+/g, ''))
-                const isHidden = isCellHidden(cell, col, row, visibility)
-                return (
-                  <span 
-                    key={cell} 
-                    className={`structure-tag row-tag ${isHidden ? 'user-hidden' : ''}`}
-                  >
-                    <span className="tag-cell">{cell}</span>
-                    {isHidden ? <EyeOff size={10} /> : label}
-                  </span>
-                )
+                const col = cell.replace(/\d+/g, ''), row = parseInt(cell.replace(/[A-Z]+/g, ''))
+                const hidden = isUserHidden(cell, col, row, visibility)
+                return <span key={cell} className={`structure-tag row-tag ${hidden ? 'user-hidden' : ''}`}><span className="tag-cell">{cell}</span>{hidden ? <EyeOff size={10} /> : label}</span>
               })}
-              {Object.keys(sheet.row_labels || {}).length > 30 && (
-                <span className="structure-tag more-tag">
-                  +{Object.keys(sheet.row_labels || {}).length - 30} more
-                </span>
-              )}
             </div>
           </div>
         )}
@@ -627,25 +585,10 @@ function SummaryView({ sheet, visibility }: SummaryViewProps) {
             <h3><Calculator size={16} /> Formulas</h3>
             <div className="formulas-list">
               {Object.entries(sheet.formulas).slice(0, 20).map(([cell, formula]) => {
-                const col = cell.replace(/\d+/g, '')
-                const row = parseInt(cell.replace(/[A-Z]+/g, ''))
-                const isHidden = isCellHidden(cell, col, row, visibility)
-                return (
-                  <div key={cell} className={`formula-row ${isHidden ? 'user-hidden' : ''}`}>
-                    <span className="formula-cell">{cell}</span>
-                    {isHidden ? (
-                      <span className="formula-hidden"><EyeOff size={12} /> Hidden</span>
-                    ) : (
-                      <code className="formula-code">{formula}</code>
-                    )}
-                  </div>
-                )
+                const col = cell.replace(/\d+/g, ''), row = parseInt(cell.replace(/[A-Z]+/g, ''))
+                const hidden = isUserHidden(cell, col, row, visibility)
+                return <div key={cell} className={`formula-row ${hidden ? 'user-hidden' : ''}`}><span className="formula-cell">{cell}</span>{hidden ? <span className="formula-hidden"><EyeOff size={12} /></span> : <code className="formula-code">{formula}</code>}</div>
               })}
-              {Object.keys(sheet.formulas).length > 20 && (
-                <div className="formula-row more">
-                  +{Object.keys(sheet.formulas).length - 20} more formulas
-                </div>
-              )}
             </div>
           </div>
         )}

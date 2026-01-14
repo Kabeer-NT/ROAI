@@ -225,6 +225,7 @@ async def get_spreadsheet_structure(
 ):
     """
     Get the structure of a spreadsheet (what the LLM sees).
+    When include_cells=True, also returns numeric_values for the UI preview.
     """
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
@@ -272,9 +273,35 @@ async def get_spreadsheet_structure(
         
         # Include text_values for grid view if requested
         if include_cells:
-            # Include text values (all cells for full grid display)
             if hasattr(s, 'text_values') and s.text_values:
                 sheet_data["text_values"] = s.text_values
+            
+            # NEW: Include numeric values for UI preview (whitelisting feature)
+            # Pull from actual DataFrame data
+            if file_id in spreadsheet_context["files"]:
+                file_data = spreadsheet_context["files"][file_id]
+                if name in file_data["sheets"]:
+                    df = file_data["sheets"][name]
+                    numeric_values = {}
+                    max_rows = min(len(df), 100)  # Limit to 100 rows
+                    max_cols = min(len(df.columns), 26)  # Limit to 26 columns (A-Z)
+                    
+                    for row_idx in range(max_rows):
+                        for col_idx in range(max_cols):
+                            col_letter = _get_column_letter(col_idx)
+                            cell_addr = f"{col_letter}{row_idx + 2}"  # +2 because row 1 is header
+                            value = df.iloc[row_idx, col_idx]
+                            
+                            # Only include numeric values
+                            if pd.notna(value) and isinstance(value, (int, float)):
+                                # Convert numpy types to Python native
+                                if hasattr(value, 'item'):  # numpy scalar
+                                    numeric_values[cell_addr] = value.item()
+                                else:
+                                    numeric_values[cell_addr] = float(value) if isinstance(value, float) else int(value)
+                    
+                    if numeric_values:
+                        sheet_data["numeric_values"] = numeric_values
         
         # Include full cell types for grid view if requested
         if include_cells and hasattr(s, 'cell_types') and s.cell_types:
@@ -282,6 +309,17 @@ async def get_spreadsheet_structure(
         
         result["structures"][name] = sheet_data
     
+    return result
+
+
+def _get_column_letter(idx: int) -> str:
+    """Convert 0-indexed column number to Excel-style letter (A, B, ..., Z, AA, etc.)"""
+    result = ""
+    idx += 1  # Convert to 1-indexed
+    while idx > 0:
+        idx -= 1
+        result = chr(65 + idx % 26) + result
+        idx //= 26
     return result
 
 

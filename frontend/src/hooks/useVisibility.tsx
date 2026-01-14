@@ -1,67 +1,60 @@
 import { useState, useCallback, useMemo } from 'react'
 
 // ============================================================================
-// Types - Now SHEET-SCOPED
+// Types - Sheet-scoped with WHITELIST support
 // ============================================================================
 
 /**
  * Visibility state for a single sheet within a file.
- * Cell addresses are local to the sheet (e.g., "A1", "B2").
+ * 
+ * hidden* = extra items to hide (beyond default numeric hiding)
+ * visible* = items to SHOW (overrides default numeric hiding - whitelist)
  */
 export interface SheetVisibilityState {
-  hiddenColumns: Set<string>  // Column letters: "A", "B", "C"
-  hiddenRows: Set<number>     // Row numbers: 1, 2, 3
-  hiddenCells: Set<string>    // Individual cells: "A1", "B2"
+  hiddenColumns: Set<string>
+  hiddenRows: Set<number>
+  hiddenCells: Set<string>
+  // Whitelist - explicitly show these (overrides default numeric hiding)
+  visibleColumns: Set<string>
+  visibleRows: Set<number>
+  visibleCells: Set<string>
 }
 
-/**
- * Visibility state for an entire file, organized by sheet name.
- */
 export interface FileVisibilityState {
   [sheetName: string]: SheetVisibilityState
 }
 
-/**
- * Serialized format for a single sheet (for API/storage).
- */
 export interface SerializedSheetVisibility {
   hiddenColumns: string[]
   hiddenRows: number[]
   hiddenCells: string[]
+  visibleColumns?: string[]
+  visibleRows?: number[]
+  visibleCells?: string[]
 }
 
-/**
- * Serialized format for an entire file (for API/storage).
- */
 export interface SerializedFileVisibility {
   [sheetName: string]: SerializedSheetVisibility
 }
 
-/**
- * Legacy format (flat, not sheet-scoped) - for backward compatibility
- */
-export interface LegacySerializedVisibility {
-  hiddenColumns: string[]
-  hiddenRows: number[]
-  hiddenCells: string[]
-}
-
-// For backward compatibility with existing components
+// For backward compatibility
 export type VisibilityState = SheetVisibilityState
 export type SerializedVisibility = SerializedSheetVisibility
 
-// Per-file visibility, keyed by FILENAME
 type FileVisibilityMap = Map<string, FileVisibilityState>
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function createEmptySheetVisibility(): SheetVisibilityState {
+export function createEmptySheetVisibility(): SheetVisibilityState {
   return {
     hiddenColumns: new Set(),
     hiddenRows: new Set(),
     hiddenCells: new Set(),
+    visibleColumns: new Set(),
+    visibleRows: new Set(),
+    visibleCells: new Set(),
   }
 }
 
@@ -70,18 +63,26 @@ function createEmptyFileVisibility(): FileVisibilityState {
 }
 
 export function serializeSheetVisibility(visibility: SheetVisibilityState): SerializedSheetVisibility {
-  return {
+  const result: SerializedSheetVisibility = {
     hiddenColumns: [...visibility.hiddenColumns],
     hiddenRows: [...visibility.hiddenRows],
     hiddenCells: [...visibility.hiddenCells],
   }
+  // Only include visible* if they have items
+  if (visibility.visibleColumns?.size > 0) result.visibleColumns = [...visibility.visibleColumns]
+  if (visibility.visibleRows?.size > 0) result.visibleRows = [...visibility.visibleRows]
+  if (visibility.visibleCells?.size > 0) result.visibleCells = [...visibility.visibleCells]
+  return result
 }
 
 export function deserializeSheetVisibility(data: SerializedSheetVisibility): SheetVisibilityState {
   return {
-    hiddenColumns: new Set(data.hiddenColumns),
-    hiddenRows: new Set(data.hiddenRows),
-    hiddenCells: new Set(data.hiddenCells),
+    hiddenColumns: new Set(data.hiddenColumns || []),
+    hiddenRows: new Set(data.hiddenRows || []),
+    hiddenCells: new Set(data.hiddenCells || []),
+    visibleColumns: new Set(data.visibleColumns || []),
+    visibleRows: new Set(data.visibleRows || []),
+    visibleCells: new Set(data.visibleCells || []),
   }
 }
 
@@ -89,10 +90,9 @@ export function serializeFileVisibility(fileVisibility: FileVisibilityState): Se
   const result: SerializedFileVisibility = {}
   for (const [sheetName, sheetVis] of Object.entries(fileVisibility)) {
     const serialized = serializeSheetVisibility(sheetVis)
-    // Only include if there's something hidden
-    if (serialized.hiddenColumns.length > 0 || 
-        serialized.hiddenRows.length > 0 || 
-        serialized.hiddenCells.length > 0) {
+    const hasHidden = serialized.hiddenColumns.length > 0 || serialized.hiddenRows.length > 0 || serialized.hiddenCells.length > 0
+    const hasVisible = (serialized.visibleColumns?.length || 0) > 0 || (serialized.visibleRows?.length || 0) > 0 || (serialized.visibleCells?.length || 0) > 0
+    if (hasHidden || hasVisible) {
       result[sheetName] = serialized
     }
   }
@@ -107,53 +107,69 @@ export function deserializeFileVisibility(data: SerializedFileVisibility): FileV
   return result
 }
 
+// Ensure a visibility object has all required fields
+export function ensureVisibilityFields(vis: Partial<SheetVisibilityState>): SheetVisibilityState {
+  return {
+    hiddenColumns: vis.hiddenColumns ?? new Set(),
+    hiddenRows: vis.hiddenRows ?? new Set(),
+    hiddenCells: vis.hiddenCells ?? new Set(),
+    visibleColumns: vis.visibleColumns ?? new Set(),
+    visibleRows: vis.visibleRows ?? new Set(),
+    visibleCells: vis.visibleCells ?? new Set(),
+  }
+}
+
 /**
- * Check if a cell address is hidden based on sheet visibility state
+ * Check if a cell is user-hidden (extra hidden, beyond default)
  */
-export function isCellHidden(
-  cellAddr: string,
-  visibility: SheetVisibilityState
-): boolean {
-  // Direct cell hide
-  if (visibility.hiddenCells.has(cellAddr)) return true
-  
-  // Extract column and row from cell address
+export function isCellUserHidden(cellAddr: string, visibility: SheetVisibilityState): boolean {
+  if (visibility.hiddenCells?.has(cellAddr)) return true
   const match = cellAddr.match(/^([A-Z]+)(\d+)$/)
   if (!match) return false
-  
   const [, col, rowStr] = match
   const row = parseInt(rowStr, 10)
-  
-  // Column hidden
-  if (visibility.hiddenColumns.has(col)) return true
-  
-  // Row hidden
-  if (visibility.hiddenRows.has(row)) return true
-  
+  if (visibility.hiddenColumns?.has(col)) return true
+  if (visibility.hiddenRows?.has(row)) return true
   return false
 }
 
 /**
- * Count total hidden items across all sheets in a file
+ * Check if a cell is whitelisted (shown despite being numeric)
  */
+export function isCellWhitelisted(cellAddr: string, visibility: SheetVisibilityState): boolean {
+  if (visibility.visibleCells?.has(cellAddr)) return true
+  const match = cellAddr.match(/^([A-Z]+)(\d+)$/)
+  if (!match) return false
+  const [, col, rowStr] = match
+  const row = parseInt(rowStr, 10)
+  if (visibility.visibleColumns?.has(col)) return true
+  if (visibility.visibleRows?.has(row)) return true
+  return false
+}
+
+function countSheetHidden(visibility: SheetVisibilityState): number {
+  return (visibility.hiddenColumns?.size || 0) + (visibility.hiddenRows?.size || 0) + (visibility.hiddenCells?.size || 0)
+}
+
+function countSheetVisible(visibility: SheetVisibilityState): number {
+  return (visibility.visibleColumns?.size || 0) + (visibility.visibleRows?.size || 0) + (visibility.visibleCells?.size || 0)
+}
+
 function countFileHidden(fileVisibility: FileVisibilityState): number {
-  let total = 0
-  for (const sheetVis of Object.values(fileVisibility)) {
-    total += sheetVis.hiddenColumns.size
-    total += sheetVis.hiddenRows.size
-    total += sheetVis.hiddenCells.size
-  }
-  return total
+  return Object.values(fileVisibility).reduce((t, s) => t + countSheetHidden(s), 0)
+}
+
+function countFileVisible(fileVisibility: FileVisibilityState): number {
+  return Object.values(fileVisibility).reduce((t, s) => t + countSheetVisible(s), 0)
 }
 
 // ============================================================================
 // Hook
 // ============================================================================
 
-const STORAGE_KEY = 'roai_visibility_v3'  // New version for sheet-scoped data
+const STORAGE_KEY = 'roai_visibility_v4' // v4 for whitelist support
 
 export function useVisibility() {
-  // Load initial state from localStorage
   const [visibilityMap, setVisibilityMap] = useState<FileVisibilityMap>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -166,13 +182,18 @@ export function useVisibility() {
         return map
       }
       
-      // Try to migrate from v2 format (flat, not sheet-scoped)
-      const oldSaved = localStorage.getItem('roai_visibility_v2')
-      if (oldSaved) {
-        console.log('Migrating visibility from v2 to v3 format...')
-        // Old format doesn't have sheet info, so we can't migrate meaningfully
-        // Just start fresh
-        localStorage.removeItem('roai_visibility_v2')
+      // Migrate from v3
+      const v3Saved = localStorage.getItem('roai_visibility_v3')
+      if (v3Saved) {
+        console.log('Migrating visibility from v3 to v4...')
+        const parsed = JSON.parse(v3Saved) as Record<string, SerializedFileVisibility>
+        const map = new Map<string, FileVisibilityState>()
+        Object.entries(parsed).forEach(([filename, fileData]) => {
+          map.set(filename, deserializeFileVisibility(fileData))
+        })
+        localStorage.setItem(STORAGE_KEY, v3Saved) // Same format, just with optional visible* fields
+        localStorage.removeItem('roai_visibility_v3')
+        return map
       }
     } catch (e) {
       console.error('Failed to load visibility state:', e)
@@ -180,7 +201,6 @@ export function useVisibility() {
     return new Map()
   })
 
-  // Save to localStorage whenever state changes
   const saveToStorage = useCallback((map: FileVisibilityMap) => {
     try {
       const serialized: Record<string, SerializedFileVisibility> = {}
@@ -196,16 +216,14 @@ export function useVisibility() {
     }
   }, [])
 
-  // Get visibility for a specific sheet within a file
   const getSheetVisibility = useCallback((filename: string, sheetName: string): SheetVisibilityState => {
     const fileVis = visibilityMap.get(filename)
     if (!fileVis || !fileVis[sheetName]) {
       return createEmptySheetVisibility()
     }
-    return fileVis[sheetName]
+    return ensureVisibilityFields(fileVis[sheetName])
   }, [visibilityMap])
 
-  // Set visibility for a specific sheet within a file
   const setSheetVisibility = useCallback((filename: string, sheetName: string, visibility: SheetVisibilityState) => {
     setVisibilityMap(prev => {
       const next = new Map(prev)
@@ -217,33 +235,16 @@ export function useVisibility() {
     })
   }, [saveToStorage])
 
-  // Get visibility for entire file (all sheets) - for backward compatibility
-  // Returns the visibility for the first sheet or empty if no sheets
-  const getVisibility = useCallback((filename: string): SheetVisibilityState => {
-    const fileVis = visibilityMap.get(filename)
-    if (!fileVis) {
-      return createEmptySheetVisibility()
-    }
-    // Return first sheet's visibility for backward compatibility
-    const sheetNames = Object.keys(fileVis)
-    if (sheetNames.length === 0) {
-      return createEmptySheetVisibility()
-    }
-    return fileVis[sheetNames[0]]
-  }, [visibilityMap])
-
-  // Set visibility for a file - for backward compatibility
-  // This sets visibility for a default sheet name
-  const setVisibility = useCallback((filename: string, visibility: SheetVisibilityState, sheetName: string = '_default') => {
-    setSheetVisibility(filename, sheetName, visibility)
-  }, [setSheetVisibility])
-
-  // Get full file visibility (all sheets)
   const getFileVisibility = useCallback((filename: string): FileVisibilityState => {
-    return visibilityMap.get(filename) ?? createEmptyFileVisibility()
+    const fileVis = visibilityMap.get(filename) ?? createEmptyFileVisibility()
+    // Ensure all sheets have proper fields
+    const result: FileVisibilityState = {}
+    for (const [sheetName, sheetVis] of Object.entries(fileVis)) {
+      result[sheetName] = ensureVisibilityFields(sheetVis)
+    }
+    return result
   }, [visibilityMap])
 
-  // Set visibility for entire file (all sheets at once)
   const setFileVisibility = useCallback((filename: string, fileVis: FileVisibilityState) => {
     setVisibilityMap(prev => {
       const next = new Map(prev)
@@ -253,7 +254,6 @@ export function useVisibility() {
     })
   }, [saveToStorage])
 
-  // Clear visibility for a specific file
   const clearVisibility = useCallback((filename: string) => {
     setVisibilityMap(prev => {
       const next = new Map(prev)
@@ -263,28 +263,11 @@ export function useVisibility() {
     })
   }, [saveToStorage])
 
-  // Clear all visibility
   const clearAllVisibility = useCallback(() => {
     setVisibilityMap(new Map())
     localStorage.removeItem(STORAGE_KEY)
   }, [])
 
-  // Get serialized visibility for a single sheet (for API calls)
-  const getSerializedSheetVisibility = useCallback((filename: string, sheetName: string): SerializedSheetVisibility | null => {
-    const sheetVis = getSheetVisibility(filename, sheetName)
-    const serialized = serializeSheetVisibility(sheetVis)
-    if (
-      serialized.hiddenColumns.length === 0 &&
-      serialized.hiddenRows.length === 0 &&
-      serialized.hiddenCells.length === 0
-    ) {
-      return null
-    }
-    return serialized
-  }, [getSheetVisibility])
-
-  // Get all visibility for all files (for API calls) - NEW FORMAT with sheets
-  // Returns: { "filename.xlsx": { "Sheet1": {...}, "Sheet2": {...} } }
   const getAllSerializedVisibility = useCallback((): Record<string, SerializedFileVisibility> => {
     const result: Record<string, SerializedFileVisibility> = {}
     visibilityMap.forEach((fileVisibility, filename) => {
@@ -296,38 +279,33 @@ export function useVisibility() {
     return result
   }, [visibilityMap])
 
-  // Summary stats
   const stats = useMemo(() => {
     let totalHidden = 0
-    let filesWithHidden = 0
+    let totalVisible = 0
+    let filesWithChanges = 0
     
     visibilityMap.forEach(fileVisibility => {
-      const fileCount = countFileHidden(fileVisibility)
-      if (fileCount > 0) {
-        filesWithHidden++
-        totalHidden += fileCount
+      const h = countFileHidden(fileVisibility)
+      const v = countFileVisible(fileVisibility)
+      if (h > 0 || v > 0) {
+        filesWithChanges++
+        totalHidden += h
+        totalVisible += v
       }
     })
     
     return {
-      filesWithHidden,
+      filesWithHidden: filesWithChanges,
       totalHiddenItems: totalHidden,
+      totalVisibleItems: totalVisible,
     }
   }, [visibilityMap])
 
   return {
-    // Sheet-scoped methods (recommended)
     getSheetVisibility,
     setSheetVisibility,
     getFileVisibility,
     setFileVisibility,
-    getSerializedSheetVisibility,
-    
-    // Backward-compatible methods
-    getVisibility,
-    setVisibility,
-    
-    // Common methods
     clearVisibility,
     clearAllVisibility,
     getAllSerializedVisibility,
