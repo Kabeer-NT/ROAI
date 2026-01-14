@@ -1,11 +1,16 @@
 """
-Spreadsheet Service - Relationship-Based Approach
-=================================================
-LLM sees ONLY structure (headers, labels, formulas, cell types).
-LLM generates formulas/code to answer questions.
-We execute locally on real data and return results.
+Spreadsheet Service - FLEXIBLE Visibility Support with EXECUTION BLOCKING
+==========================================================================
+Supports BOTH visibility key formats:
+- Keyed by file_id (UUID): "3d2ae260-09c1-40fa-ba81-3ba9b6be45a3"
+- Keyed by filename: "ROAI_Test_Data.xlsx"
 
-OPTION B: Use openpyxl directly for execution - cell references just work.
+And BOTH visibility structures:
+- Flat: { hiddenColumns: [], hiddenRows: [], hiddenCells: [] }
+- Sheet-scoped: { "Sheet1": { hiddenColumns: [], ... } }
+
+CRITICAL: Visibility is ENFORCED during execution, not just in context building.
+Hidden rows/columns/cells will be SKIPPED.
 """
 
 import pandas as pd
@@ -24,32 +29,200 @@ class SheetStructure:
     name: str
     rows: int
     cols: int
-    headers: dict[str, str]  # cell_address -> header text (e.g., "C4" -> "Shares Held")
-    row_labels: dict[str, str]  # cell_address -> label text (column A)
-    text_values: dict[str, str]  # cell_address -> any text value (for display)
-    formulas: dict[str, str]  # cell_address -> formula
-    cell_types: dict[str, str]  # cell_address -> "numeric", "text", "formula", "empty"
+    headers: dict[str, str]
+    row_labels: dict[str, str]
+    text_values: dict[str, str]
+    formulas: dict[str, str]
+    cell_types: dict[str, str]
 
 
 # Global storage
 spreadsheet_context: dict = {
     "files": {},           # file_id -> {filename, sheets: {name -> DataFrame}}
     "structures": {},      # file_id -> {sheet_name -> SheetStructure}
-    "raw_bytes": {},       # file_id -> original file bytes (for openpyxl execution)
+    "raw_bytes": {},       # file_id -> original file bytes
+    "current_visibility": None,  # Store current visibility for execution
 }
 
+
+# =============================================================================
+# VISIBILITY HELPERS - FLEXIBLE FORMAT SUPPORT
+# =============================================================================
+
+def set_current_visibility(visibility: dict = None):
+    """Store visibility settings for use during execution."""
+    spreadsheet_context["current_visibility"] = visibility
+
+
+def get_current_visibility() -> dict:
+    """Get current visibility settings."""
+    return spreadsheet_context.get("current_visibility")
+
+
+def get_filename_for_file_id(file_id: str) -> Optional[str]:
+    """Get filename for a given file_id."""
+    if file_id in spreadsheet_context["files"]:
+        return spreadsheet_context["files"][file_id].get("filename")
+    return None
+
+
+def get_file_id_for_filename(filename: str) -> Optional[str]:
+    """Get file_id for a given filename."""
+    for fid, data in spreadsheet_context["files"].items():
+        if data.get("filename") == filename:
+            return fid
+    return None
+
+
+def _get_visibility_for_file(file_id: str, filename: str, visibility: dict) -> dict:
+    """
+    Get visibility settings for a file, checking both file_id and filename keys.
+    Returns the flat visibility dict or None.
+    """
+    if not visibility:
+        return None
+    
+    # Try file_id first (what frontend currently sends)
+    if file_id and file_id in visibility:
+        return visibility[file_id]
+    
+    # Try filename
+    if filename and filename in visibility:
+        return visibility[filename]
+    
+    return None
+
+
+def _get_sheet_visibility(file_id: str, filename: str, sheet_name: str, visibility: dict) -> dict:
+    """
+    Get visibility for a specific sheet, handling both flat and sheet-scoped formats.
+    
+    Flat format: { hiddenColumns: [], hiddenRows: [], hiddenCells: [] }
+    Sheet-scoped: { "Sheet1": { hiddenColumns: [], ... } }
+    
+    Returns dict with hiddenColumns, hiddenRows, hiddenCells or None.
+    """
+    file_vis = _get_visibility_for_file(file_id, filename, visibility)
+    if not file_vis:
+        return None
+    
+    # Check if it's sheet-scoped (has sheet name as key with nested structure)
+    if sheet_name and sheet_name in file_vis:
+        sheet_vis = file_vis[sheet_name]
+        # Verify it's actually a visibility structure
+        if isinstance(sheet_vis, dict) and ('hiddenRows' in sheet_vis or 'hiddenColumns' in sheet_vis or 'hiddenCells' in sheet_vis):
+            return sheet_vis
+    
+    # Check if it's flat format (has hiddenRows directly)
+    if 'hiddenRows' in file_vis or 'hiddenColumns' in file_vis or 'hiddenCells' in file_vis:
+        return file_vis
+    
+    return None
+
+
+def is_cell_hidden(
+    file_id: str,
+    filename: str, 
+    sheet_name: str,
+    cell_addr: str, 
+    visibility: dict = None
+) -> bool:
+    """
+    Check if a cell should be hidden based on visibility settings.
+    Handles both flat and sheet-scoped formats.
+    """
+    sheet_vis = _get_sheet_visibility(file_id, filename, sheet_name, visibility)
+    if not sheet_vis:
+        return False
+    
+    cell_addr_upper = cell_addr.upper()
+    
+    # Check individual cell
+    hidden_cells = sheet_vis.get('hiddenCells', [])
+    if cell_addr_upper in [c.upper() for c in hidden_cells]:
+        return True
+    
+    # Extract column and row from cell address
+    match = re.match(r'^([A-Z]+)(\d+)$', cell_addr_upper)
+    if not match:
+        return False
+    
+    col, row_str = match.groups()
+    row = int(row_str)
+    
+    # Check column
+    hidden_cols = sheet_vis.get('hiddenColumns', [])
+    if col in [c.upper() for c in hidden_cols]:
+        return True
+    
+    # Check row
+    hidden_rows = sheet_vis.get('hiddenRows', [])
+    if row in hidden_rows:
+        return True
+    
+    return False
+
+
+def is_row_hidden(file_id: str, filename: str, sheet_name: str, row: int, visibility: dict = None) -> bool:
+    """Check if an entire row is hidden."""
+    sheet_vis = _get_sheet_visibility(file_id, filename, sheet_name, visibility)
+    if not sheet_vis:
+        return False
+    
+    return row in sheet_vis.get('hiddenRows', [])
+
+
+def is_column_hidden(file_id: str, filename: str, sheet_name: str, col: str, visibility: dict = None) -> bool:
+    """Check if an entire column is hidden."""
+    sheet_vis = _get_sheet_visibility(file_id, filename, sheet_name, visibility)
+    if not sheet_vis:
+        return False
+    
+    hidden_cols = sheet_vis.get('hiddenColumns', [])
+    return col.upper() in [c.upper() for c in hidden_cols]
+
+
+def get_visibility_summary(file_id: str, filename: str, sheet_name: str, visibility: dict = None) -> str:
+    """Get a human-readable summary of what's hidden."""
+    sheet_vis = _get_sheet_visibility(file_id, filename, sheet_name, visibility)
+    if not sheet_vis:
+        return ""
+    
+    parts = []
+    
+    cols = sheet_vis.get('hiddenColumns', [])
+    rows = sheet_vis.get('hiddenRows', [])
+    cells = sheet_vis.get('hiddenCells', [])
+    
+    if cols:
+        parts.append(f"Columns {', '.join(sorted(cols))}")
+    if rows:
+        sorted_rows = sorted(rows)
+        if len(sorted_rows) > 10:
+            parts.append(f"Rows {sorted_rows[0]}-{sorted_rows[-1]} ({len(sorted_rows)} rows)")
+        else:
+            parts.append(f"Rows {', '.join(map(str, sorted_rows))}")
+    if cells:
+        parts.append(f"Cells {', '.join(sorted(cells))}")
+    
+    if parts:
+        return f"[HIDDEN FROM AI: {'; '.join(parts)}]"
+    return ""
+
+
+# =============================================================================
+# FILE MANAGEMENT
+# =============================================================================
 
 def clear_context():
     spreadsheet_context["files"] = {}
     spreadsheet_context["structures"] = {}
     spreadsheet_context["raw_bytes"] = {}
+    spreadsheet_context["current_visibility"] = None
 
 
 def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]:
-    """
-    Extract structure from Excel file including formulas.
-    Detects header rows automatically and maps cell addresses.
-    """
+    """Extract structure from Excel file including formulas."""
     structures = {}
     
     try:
@@ -62,33 +235,30 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
             
             formulas = {}
             cell_types = {}
-            headers = {}  # Now maps cell address -> header text
-            row_labels = {}  # Maps cell address -> label text
-            text_values = {}  # ALL text values for grid display
+            headers = {}
+            row_labels = {}
+            text_values = {}
             
             max_row = ws.max_row or 1
             max_col = ws.max_column or 1
             
-            # First pass: find the header row (row with most text cells that look like column names)
+            # Find header row
             header_row = None
             max_header_score = 0
             
             for row_idx in range(1, min(max_row + 1, 15)):
                 text_count = 0
-                non_empty_count = 0
                 for col_idx in range(1, max_col + 1):
                     value = ws_values.cell(row=row_idx, column=col_idx).value
                     if value is not None and value != "":
-                        non_empty_count += 1
                         if isinstance(value, str) and not value.startswith("⚠") and not value.startswith("🔍"):
                             text_count += 1
                 
-                # Score: prefer rows with many text cells (likely headers)
                 if text_count >= 3 and text_count > max_header_score:
                     max_header_score = text_count
                     header_row = row_idx
             
-            # Second pass: extract structure
+            # Extract structure
             for row_idx in range(1, max_row + 1):
                 for col_idx in range(1, max_col + 1):
                     cell = ws.cell(row=row_idx, column=col_idx)
@@ -96,7 +266,6 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
                     value_cell = ws_values.cell(row=row_idx, column=col_idx)
                     value = value_cell.value
                     
-                    # Check for formula
                     if cell.value and isinstance(cell.value, str) and cell.value.startswith("="):
                         formulas[cell_addr] = cell.value
                         cell_types[cell_addr] = "formula"
@@ -106,14 +275,11 @@ def extract_structure_from_excel(file_bytes: bytes) -> dict[str, SheetStructure]
                         cell_types[cell_addr] = "numeric"
                     else:
                         cell_types[cell_addr] = "text"
-                        # Store ALL text values for grid display
-                        text_values[cell_addr] = str(value)[:100]  # Limit length
+                        text_values[cell_addr] = str(value)[:100]
                     
-                    # Record headers (from detected header row)
                     if row_idx == header_row and value is not None and isinstance(value, str):
                         headers[cell_addr] = str(value)
                     
-                    # Record row labels (first column text values, below header)
                     if col_idx == 1 and header_row and row_idx > header_row:
                         if value is not None and isinstance(value, str) and not value.startswith("⚠") and not value.startswith("🔍") and not value.startswith("•"):
                             row_labels[cell_addr] = str(value)
@@ -178,16 +344,13 @@ def extract_structure_from_csv(df: pd.DataFrame, sheet_name: str) -> SheetStruct
 
 
 def add_file_to_context(file_id: str, filename: str, file_bytes: bytes, sheets: dict[str, pd.DataFrame]):
-    """
-    Add file to context. Store raw bytes for execution, structure for LLM.
-    """
+    """Add file to context."""
     spreadsheet_context["files"][file_id] = {
         "filename": filename,
         "sheets": sheets
     }
     spreadsheet_context["raw_bytes"][file_id] = file_bytes
     
-    # Extract structure based on file type
     if filename.endswith(('.xlsx', '.xls')):
         structures = extract_structure_from_excel(file_bytes)
     else:
@@ -204,11 +367,19 @@ def remove_file_from_context(file_id: str):
             del spreadsheet_context[store][file_id]
 
 
-def build_llm_context() -> str:
+# =============================================================================
+# LLM CONTEXT BUILDING
+# =============================================================================
+
+def build_llm_context(visibility: dict = None) -> str:
     """
     Build context for LLM showing ONLY structure - NO numeric values.
-    Shows exact cell addresses so Claude can reference them directly.
+    Respects visibility settings to hide user-specified data.
+    Also stores visibility for use during execution.
     """
+    # Store visibility for use during execution
+    set_current_visibility(visibility)
+    
     if not spreadsheet_context["structures"]:
         return ""
     
@@ -223,42 +394,62 @@ def build_llm_context() -> str:
         
         for sheet_name, structure in structures.items():
             parts.append(f"\n### Sheet: {sheet_name}")
-            parts.append(f"Size: {structure.rows} rows × {structure.cols} columns\n")
+            parts.append(f"Size: {structure.rows} rows × {structure.cols} columns")
             
-            # Show headers with exact cell addresses
+            # Add visibility summary
+            vis_summary = get_visibility_summary(file_id, filename, sheet_name, visibility)
+            if vis_summary:
+                parts.append(f"{vis_summary}")
+            
+            parts.append("")
+            
+            # Show headers (skip hidden ones)
             if structure.headers:
-                parts.append("**Column Headers:**")
-                for cell_addr, header_text in sorted(structure.headers.items(), key=lambda x: column_index_from_string(x[0].rstrip('0123456789'))):
-                    parts.append(f"  {cell_addr}: {header_text}")
+                visible_headers = {
+                    addr: text for addr, text in structure.headers.items()
+                    if not is_cell_hidden(file_id, filename, sheet_name, addr, visibility)
+                }
+                if visible_headers:
+                    parts.append("**Column Headers:**")
+                    for cell_addr, header_text in sorted(visible_headers.items(), 
+                            key=lambda x: column_index_from_string(x[0].rstrip('0123456789'))):
+                        parts.append(f"  {cell_addr}: {header_text}")
             
-            # Show row labels with exact cell addresses
+            # Show row labels (skip hidden ones)
             if structure.row_labels:
-                parts.append(f"\n**Row Labels (column A):**")
-                items = list(structure.row_labels.items())[:25]
-                for cell_addr, label in items:
-                    parts.append(f"  {cell_addr}: {label}")
-                if len(structure.row_labels) > 25:
-                    parts.append(f"  ... and {len(structure.row_labels) - 25} more rows")
+                visible_labels = {
+                    addr: text for addr, text in structure.row_labels.items()
+                    if not is_cell_hidden(file_id, filename, sheet_name, addr, visibility)
+                }
+                if visible_labels:
+                    parts.append(f"\n**Row Labels (column A):**")
+                    items = list(visible_labels.items())[:25]
+                    for cell_addr, label in items:
+                        parts.append(f"  {cell_addr}: {label}")
+                    if len(visible_labels) > 25:
+                        parts.append(f"  ... and {len(visible_labels) - 25} more rows")
             
             # Show data range
             if structure.headers:
                 header_cells = list(structure.headers.keys())
                 if header_cells:
-                    # Find the header row number
                     header_row = int(re.search(r'\d+', header_cells[0]).group())
                     data_start_row = header_row + 1
-                    
-                    # Find last data row (last row with numeric data before totals/notes)
                     last_data_row = structure.rows
-                    parts.append(f"\n**Data Range:** Row {data_start_row} to ~Row {last_data_row} (check row labels for actual data rows)")
+                    parts.append(f"\n**Data Range:** Row {data_start_row} to ~Row {last_data_row}")
             
-            # Show formulas
+            # Show formulas (skip hidden ones)
             if structure.formulas:
-                parts.append(f"\n**Existing Formulas:**")
-                for cell_addr, formula in list(structure.formulas.items())[:15]:
-                    parts.append(f"  {cell_addr}: {formula}")
-                if len(structure.formulas) > 15:
-                    parts.append(f"  ... and {len(structure.formulas) - 15} more formulas")
+                visible_formulas = {
+                    addr: formula for addr, formula in structure.formulas.items()
+                    if not is_cell_hidden(file_id, filename, sheet_name, addr, visibility)
+                }
+                if visible_formulas:
+                    parts.append(f"\n**Existing Formulas:**")
+                    for cell_addr, formula in list(visible_formulas.items())[:15]:
+                        parts.append(f"  {cell_addr}: {formula}")
+                    if len(visible_formulas) > 15:
+                        parts.append(f"  ... and {len(visible_formulas) - 15} more formulas")
             
             # Show cell type summary
             type_counts = {}
@@ -271,18 +462,110 @@ def build_llm_context() -> str:
     return "\n".join(parts)
 
 
-def _get_cell_value(ws, cell_ref: str) -> Any:
-    """Get value from a cell reference like 'C5'."""
+# =============================================================================
+# EXECUTION HELPERS - WITH VISIBILITY ENFORCEMENT
+# =============================================================================
+
+def _get_cell_value_with_visibility(ws, cell_ref: str, file_id: str, filename: str, sheet_name: str) -> Any:
+    """Get value from a cell reference, respecting visibility."""
     match = re.match(r'^([A-Z]+)(\d+)$', cell_ref.upper())
     if not match:
         raise ValueError(f"Invalid cell reference: {cell_ref}")
     
-    col_letter, row_num = match.groups()
+    # Check visibility
+    visibility = get_current_visibility()
+    if visibility and is_cell_hidden(file_id, filename, sheet_name, cell_ref.upper(), visibility):
+        return "[HIDDEN]"
+    
+    return ws[cell_ref].value
+
+
+def _get_range_values_with_visibility(ws, range_ref: str, file_id: str, filename: str, sheet_name: str) -> list:
+    """Get NUMERIC values from a range, respecting visibility. Hidden cells are skipped."""
+    match = re.match(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$', range_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid range reference: {range_ref}")
+    
+    col_start, row_start, col_end, row_end = match.groups()
+    row_start, row_end = int(row_start), int(row_end)
+    col_start_idx = column_index_from_string(col_start)
+    col_end_idx = column_index_from_string(col_end)
+    
+    visibility = get_current_visibility()
+    
+    values = []
+    for row in range(row_start, row_end + 1):
+        # Skip entire hidden row
+        if visibility and is_row_hidden(file_id, filename, sheet_name, row, visibility):
+            continue
+        
+        for col in range(col_start_idx, col_end_idx + 1):
+            col_letter = get_column_letter(col)
+            cell_addr = f"{col_letter}{row}"
+            
+            # Skip hidden column
+            if visibility and is_column_hidden(file_id, filename, sheet_name, col_letter, visibility):
+                continue
+            
+            # Skip hidden cell
+            if visibility and is_cell_hidden(file_id, filename, sheet_name, cell_addr, visibility):
+                continue
+            
+            cell = ws.cell(row=row, column=col)
+            if cell.value is not None and isinstance(cell.value, (int, float)):
+                values.append(cell.value)
+    
+    return values
+
+
+def _get_range_all_values_with_visibility(ws, range_ref: str, file_id: str, filename: str, sheet_name: str) -> list:
+    """Get ALL values from a range, respecting visibility. Hidden cells are skipped."""
+    match = re.match(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$', range_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid range reference: {range_ref}")
+    
+    col_start, row_start, col_end, row_end = match.groups()
+    row_start, row_end = int(row_start), int(row_end)
+    col_start_idx = column_index_from_string(col_start)
+    col_end_idx = column_index_from_string(col_end)
+    
+    visibility = get_current_visibility()
+    
+    values = []
+    for row in range(row_start, row_end + 1):
+        # Skip entire hidden row
+        if visibility and is_row_hidden(file_id, filename, sheet_name, row, visibility):
+            continue
+        
+        for col in range(col_start_idx, col_end_idx + 1):
+            col_letter = get_column_letter(col)
+            cell_addr = f"{col_letter}{row}"
+            
+            # Skip hidden column
+            if visibility and is_column_hidden(file_id, filename, sheet_name, col_letter, visibility):
+                continue
+            
+            # Skip hidden cell
+            if visibility and is_cell_hidden(file_id, filename, sheet_name, cell_addr, visibility):
+                continue
+            
+            cell = ws.cell(row=row, column=col)
+            values.append(cell.value)
+    
+    return values
+
+
+# Legacy functions without visibility (for backward compatibility)
+def _get_cell_value(ws, cell_ref: str) -> Any:
+    """Get value from a cell reference (legacy, no visibility check)."""
+    match = re.match(r'^([A-Z]+)(\d+)$', cell_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid cell reference: {cell_ref}")
     return ws[cell_ref].value
 
 
 def _get_range_values(ws, range_ref: str) -> list:
-    """Get values from a range like 'C5:C10'."""
+    """Get NUMERIC values from a range (legacy, no visibility check)."""
     match = re.match(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$', range_ref.upper())
     if not match:
         raise ValueError(f"Invalid range reference: {range_ref}")
@@ -302,20 +585,37 @@ def _get_range_values(ws, range_ref: str) -> list:
     return values
 
 
+def _get_range_all_values(ws, range_ref: str) -> list:
+    """Get ALL values from a range (legacy, no visibility check)."""
+    match = re.match(r'^([A-Z]+)(\d+):([A-Z]+)(\d+)$', range_ref.upper())
+    if not match:
+        raise ValueError(f"Invalid range reference: {range_ref}")
+    
+    col_start, row_start, col_end, row_end = match.groups()
+    row_start, row_end = int(row_start), int(row_end)
+    col_start_idx = column_index_from_string(col_start)
+    col_end_idx = column_index_from_string(col_end)
+    
+    values = []
+    for row in range(row_start, row_end + 1):
+        for col in range(col_start_idx, col_end_idx + 1):
+            cell = ws.cell(row=row, column=col)
+            values.append(cell.value)
+    
+    return values
+
+
 def execute_formula(formula: str, file_id: str, sheet_name: str = None) -> Any:
-    """
-    Execute a formula on the real spreadsheet data using openpyxl.
-    Cell references match exactly what's in the file - no offset confusion.
-    """
+    """Execute a formula on the real spreadsheet data, respecting visibility."""
     if file_id not in spreadsheet_context["raw_bytes"]:
         return {"error": "File not found"}
     
     raw_bytes = spreadsheet_context["raw_bytes"][file_id]
+    filename = get_filename_for_file_id(file_id)
     
     try:
         wb = openpyxl.load_workbook(BytesIO(raw_bytes), data_only=True)
         
-        # Auto-detect sheet if not specified
         if not sheet_name:
             if len(wb.sheetnames) == 1:
                 sheet_name = wb.sheetnames[0]
@@ -329,65 +629,63 @@ def execute_formula(formula: str, file_id: str, sheet_name: str = None) -> Any:
         
         ws = wb[sheet_name]
         
-        # Clean up formula
         formula = formula.strip()
         if formula.startswith("="):
             formula = formula[1:]
         
         result = None
         
-        # SUM formula
+        # SUM - with visibility
         sum_match = re.match(r'SUM\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
         if sum_match:
             range_ref = sum_match.group(1)
-            values = _get_range_values(ws, range_ref)
+            values = _get_range_values_with_visibility(ws, range_ref, file_id, filename, sheet_name)
             result = sum(values) if values else 0
         
-        # AVERAGE formula
+        # AVERAGE - with visibility
         if result is None:
             avg_match = re.match(r'AVERAGE\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
             if avg_match:
                 range_ref = avg_match.group(1)
-                values = _get_range_values(ws, range_ref)
+                values = _get_range_values_with_visibility(ws, range_ref, file_id, filename, sheet_name)
                 result = sum(values) / len(values) if values else 0
         
-        # COUNT formula
+        # COUNT - with visibility
         if result is None:
             count_match = re.match(r'COUNT\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
             if count_match:
                 range_ref = count_match.group(1)
-                values = _get_range_values(ws, range_ref)
+                values = _get_range_values_with_visibility(ws, range_ref, file_id, filename, sheet_name)
                 result = len(values)
         
-        # MAX formula
+        # MAX - with visibility
         if result is None:
             max_match = re.match(r'MAX\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
             if max_match:
                 range_ref = max_match.group(1)
-                values = _get_range_values(ws, range_ref)
+                values = _get_range_values_with_visibility(ws, range_ref, file_id, filename, sheet_name)
                 result = max(values) if values else 0
         
-        # MIN formula
+        # MIN - with visibility
         if result is None:
             min_match = re.match(r'MIN\(([A-Z]+\d+:[A-Z]+\d+)\)', formula, re.IGNORECASE)
             if min_match:
                 range_ref = min_match.group(1)
-                values = _get_range_values(ws, range_ref)
+                values = _get_range_values_with_visibility(ws, range_ref, file_id, filename, sheet_name)
                 result = min(values) if values else 0
         
-        # Single cell reference
+        # Single cell - with visibility
         if result is None:
             cell_match = re.match(r'^([A-Z]+\d+)$', formula, re.IGNORECASE)
             if cell_match:
                 cell_ref = cell_match.group(1)
-                result = _get_cell_value(ws, cell_ref)
+                result = _get_cell_value_with_visibility(ws, cell_ref, file_id, filename, sheet_name)
         
         wb.close()
         
         if result is None:
             return {"error": f"Unsupported formula: {formula}"}
         
-        # Convert numpy types to Python types
         if hasattr(result, 'item'):
             result = result.item()
         
@@ -398,77 +696,68 @@ def execute_formula(formula: str, file_id: str, sheet_name: str = None) -> Any:
 
 
 def execute_python_query(code: str, file_id: str) -> Any:
-    """
-    Execute Python/pandas code on the spreadsheet data.
-    For complex queries that can't be expressed as simple formulas.
-    
-    The 'sheets' dict contains DataFrames, but also provides 'ws' for direct cell access.
-    """
+    """Execute Python/pandas code on the spreadsheet data, respecting visibility."""
     if file_id not in spreadsheet_context["raw_bytes"]:
         return {"error": "File not found"}
     
     raw_bytes = spreadsheet_context["raw_bytes"][file_id]
+    filename = get_filename_for_file_id(file_id)
     
     try:
-        # Load workbook for direct cell access
         wb = openpyxl.load_workbook(BytesIO(raw_bytes), data_only=True)
         
-        # Create sheets dict with both DataFrame and cell accessor
         sheets = {}
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             
-            # Convert to DataFrame with proper header detection
             data = []
             for row in ws.iter_rows(values_only=True):
                 data.append(list(row))
             
             if data:
-                # Find header row (row with most non-empty string values)
                 header_row_idx = 0
                 max_text_count = 0
-                for idx, row in enumerate(data[:15]):  # Check first 15 rows
+                for idx, row in enumerate(data[:15]):
                     text_count = sum(1 for v in row if isinstance(v, str) and v and not v.startswith('⚠') and not v.startswith('🔍'))
                     if text_count >= 3 and text_count > max_text_count:
                         max_text_count = text_count
                         header_row_idx = idx
                 
-                # Use detected header row
                 headers = data[header_row_idx] if header_row_idx < len(data) else data[0]
                 df_data = data[header_row_idx + 1:] if header_row_idx + 1 < len(data) else []
                 df = pd.DataFrame(df_data, columns=headers)
                 sheets[sheet_name] = df
         
-        # Also provide direct worksheet access
         worksheets = {name: wb[name] for name in wb.sheetnames}
         
-        # Helper function to get cell value
+        # Create visibility-aware helper functions that capture file_id and filename
         def cell(sheet: str, ref: str):
-            return worksheets[sheet][ref].value
+            """Get cell value, respecting visibility."""
+            return _get_cell_value_with_visibility(worksheets[sheet], ref, file_id, filename, sheet)
         
-        # Helper function to get range values
         def range_values(sheet: str, range_ref: str):
-            return _get_range_values(worksheets[sheet], range_ref)
+            """Get numeric values from range, respecting visibility."""
+            return _get_range_values_with_visibility(worksheets[sheet], range_ref, file_id, filename, sheet)
         
-        # Create safe execution environment
+        def range_all(sheet: str, range_ref: str):
+            """Get all values from range, respecting visibility."""
+            return _get_range_all_values_with_visibility(worksheets[sheet], range_ref, file_id, filename, sheet)
+        
         safe_globals = {
             "pd": pd,
             "sheets": sheets,
             "ws": worksheets,
             "cell": cell,
             "range_values": range_values,
+            "range_all": range_all,
         }
         
-        # Execute and capture result
         exec_globals = safe_globals.copy()
         
-        # Handle multi-line code: execute all, return last expression
         code = code.strip()
         
-        # Remove comments from code to avoid syntax issues
         lines = []
         for line in code.split('\n'):
-            # Remove inline comments but keep the code part
             if '#' in line:
                 line = line.split('#')[0].rstrip()
             if line.strip():
@@ -479,31 +768,25 @@ def execute_python_query(code: str, file_id: str) -> Any:
         if not clean_code:
             return {"error": "Empty code after removing comments"}
         
-        # If it's a simple single expression, just eval it
         if '\n' not in clean_code and not any(kw in clean_code for kw in ['=', 'print(', 'for ', 'if ', 'while ']):
             result = eval(clean_code, exec_globals)
         else:
-            # Multi-line or has statements: exec everything, capture last line
             lines = clean_code.split('\n')
             last_line = lines[-1].strip()
             
-            # Check if last line is an expression (not an assignment or print)
             is_assignment = '=' in last_line and not any(op in last_line for op in ['==', '!=', '<=', '>='])
             is_print = last_line.startswith('print(')
             
             if is_assignment or is_print:
-                # Just exec everything
                 exec(clean_code, exec_globals)
                 result = "Code executed successfully"
             else:
-                # Exec all but last line, then eval last line
                 if len(lines) > 1:
                     exec('\n'.join(lines[:-1]), exec_globals)
                 result = eval(last_line, exec_globals)
         
         wb.close()
         
-        # Convert numpy/pandas types
         if hasattr(result, 'item'):
             result = result.item()
         elif isinstance(result, pd.Series):
