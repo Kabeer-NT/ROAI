@@ -1,5 +1,5 @@
 """
-Chat Routes (Protected)
+Chat Routes (Protected) - WITH VISIBILITY SUPPORT
 """
 
 from fastapi import APIRouter, Depends
@@ -20,10 +20,29 @@ class ChatMessage(BaseModel):
     content: str
 
 
+# ============================================================================
+# Visibility Types - Sheet-Scoped
+# ============================================================================
+
+class SheetVisibility(BaseModel):
+    """Visibility settings for a single sheet."""
+    hiddenColumns: list[str] = []
+    hiddenRows: list[int] = []
+    hiddenCells: list[str] = []
+
+
+# FileVisibility is a dict of sheet_name -> SheetVisibility
+# We use dict[str, SheetVisibility] but Pydantic needs special handling
+# So we'll accept dict[str, dict] and validate manually
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     model: Optional[str] = None
     conversation_id: Optional[int] = None
+    # NEW: Visibility settings (sheet-scoped)
+    # Format: { "filename.xlsx": { "Sheet1": { hiddenColumns: [...], ... }, "Sheet2": {...} } }
+    visibility: Optional[dict[str, dict[str, dict]]] = None
 
 
 class ToolCall(BaseModel):
@@ -49,7 +68,13 @@ async def chat_endpoint(
     db: Session = Depends(get_db)
 ):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
-    result = await claude.chat(messages, request.model)
+    
+    # FIX: Pass visibility to claude.chat()
+    result = await claude.chat(
+        messages, 
+        request.model,
+        visibility=request.visibility  # NEW: Pass visibility settings
+    )
     
     conversation_id = request.conversation_id
     
