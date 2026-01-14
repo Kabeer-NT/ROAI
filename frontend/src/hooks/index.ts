@@ -5,23 +5,36 @@ import { useAuth } from './useAuth'
 export { useAuth, AuthProvider } from './useAuth'
 export { useFileHandle } from './useFileHandle'
 export { useTheme } from './useTheme'
+export { useVisibility } from './useVisibility'
 export type { FileHandleEntry } from './useFileHandle'
+export type { 
+  VisibilityState, 
+  SerializedVisibility,
+  SheetVisibilityState,
+  FileVisibilityState,
+  SerializedSheetVisibility,
+  SerializedFileVisibility,
+} from './useVisibility'
 
 export function useModels() {
   const [models, setModels] = useState<string[]>([])
   const [selectedModel, setSelectedModel] = useState('')
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (loaded) return
+    
     fetch('/api/models')
       .then(res => res.json())
       .then(data => {
         if (!data.error) {
           setModels(data.models)
           setSelectedModel(data.default)
+          setLoaded(true)
         }
       })
       .catch(() => {})
-  }, [])
+  }, [loaded])
 
   return { models, selectedModel, setSelectedModel }
 }
@@ -117,7 +130,38 @@ export function useSpreadsheets() {
   return { files, setFiles, isUploading, uploadFile, reuploadFile, removeFile, clearAll }
 }
 
-export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
+// ============================================================================
+// Visibility type for API calls - NOW SHEET-SCOPED
+// ============================================================================
+
+/**
+ * NEW format - sheet-scoped visibility:
+ * {
+ *   "filename.xlsx": {
+ *     "Sheet1": { hiddenColumns: [...], hiddenRows: [...], hiddenCells: [...] },
+ *     "Sheet2": { ... }
+ *   }
+ * }
+ */
+interface SerializedSheetVisibility {
+  hiddenColumns: string[]
+  hiddenRows: number[]
+  hiddenCells: string[]
+}
+
+interface SerializedFileVisibility {
+  [sheetName: string]: SerializedSheetVisibility
+}
+
+interface UseChatOptions {
+  getAllSerializedVisibility?: () => Record<string, SerializedFileVisibility>
+}
+
+export function useChat(
+  selectedModel: string, 
+  _files: SpreadsheetFile[],
+  options?: UseChatOptions
+) {
   const { token } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -136,18 +180,46 @@ export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
     setIsLoading(true)
 
     try {
+      // Get visibility settings if available
+      const visibility = options?.getAllSerializedVisibility?.()
+      const hasVisibility = visibility && Object.keys(visibility).length > 0
+
+      // DEBUG: Log what we're sending to the backend
+      console.group('🔒 Visibility Debug (Sheet-Scoped)')
+      console.log('getAllSerializedVisibility function exists:', !!options?.getAllSerializedVisibility)
+      console.log('Raw visibility data:', visibility)
+      console.log('Has visibility items:', hasVisibility)
+      if (hasVisibility) {
+        Object.entries(visibility).forEach(([filename, fileVis]) => {
+          console.log(`📁 File: ${filename}`)
+          Object.entries(fileVis).forEach(([sheetName, sheetVis]) => {
+            console.log(`  📋 Sheet: ${sheetName}`)
+            console.log(`    Hidden columns: ${sheetVis.hiddenColumns.join(', ') || 'none'}`)
+            console.log(`    Hidden rows: ${sheetVis.hiddenRows.join(', ') || 'none'}`)
+            console.log(`    Hidden cells: ${sheetVis.hiddenCells.join(', ') || 'none'}`)
+          })
+        })
+      }
+      console.groupEnd()
+
+      const requestBody = {
+        messages: [...messages, userMessage]
+          .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
+          .map(m => ({ role: m.role, content: m.content })),
+        model: selectedModel,
+        ...(hasVisibility && { visibility }),
+      }
+
+      // DEBUG: Log the full request body
+      console.log('📤 Full request body being sent:', JSON.stringify(requestBody, null, 2))
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          messages: [...messages, userMessage]
-            .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
-            .map(m => ({ role: m.role, content: m.content })),
-          model: selectedModel,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const data = await res.json()
@@ -177,7 +249,7 @@ export function useChat(selectedModel: string, _files: SpreadsheetFile[]) {
     } finally {
       setIsLoading(false)
     }
-  }, [messages, selectedModel, isLoading, token])
+  }, [messages, selectedModel, isLoading, token, options])
 
   const addSystemMessage = useCallback((content: string) => {
     const msg: Message = {
