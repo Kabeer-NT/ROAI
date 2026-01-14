@@ -1,0 +1,276 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ============================================================================
+   CSS Reset
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================================================
+   Design Tokens & CSS Variables
+   ============================================================================ */
+
+:root {
+  /* Typography */
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+  
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  
+  /* Transitions */
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+}
+
+/* ============================================================================
+   Dark Theme (Default)
+   ============================================================================ */
+
+:root,
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-base: #08080a;
+  --bg-surface: #0c0c0f;
+  --bg-elevated: #131318;
+  --bg-hover: #1a1a21;
+  --bg-active: #22222b;
+  
+  /* Borders */
+  --border-subtle: #1e1e26;
+  --border-default: #2a2a35;
+  --border-strong: #3a3a48;
+  
+  /* Text */
+  --text-primary: #f4f4f6;
+  --text-secondary: #9898a4;
+  --text-muted: #5c5c6a;
+  
+  /* Accent */
+  --accent: #f7c948;
+  --accent-hover: #f9d66b;
+  --accent-muted: rgba(247, 201, 72, 0.15);
+  --accent-dim: #8b7128;
+  
+  /* Semantic Colors */
+  --success: #34d399;
+  --success-muted: rgba(52, 211, 153, 0.15);
+  --error: #f87171;
+  --error-muted: rgba(248, 113, 113, 0.15);
+  --info: #60a5fa;
+  --info-muted: rgba(59, 130, 246, 0.15);
+  --warning: #f59e0b;
+  --warning-muted: rgba(245, 158, 11, 0.15);
+  --purple: #a855f7;
+  --purple-muted: rgba(168, 85, 247, 0.15);
+}
+
+/* ============================================================================
+   Light Theme
+   ============================================================================ */
+
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-base: #ffffff;
+  --bg-surface: #f8fafc;
+  --bg-elevated: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --bg-active: #cbd5e1;
+  
+  /* Borders */
+  --border-subtle: #e2e8f0;
+  --border-default: #cbd5e1;
+  --border-strong: #94a3b8;
+  
+  /* Text */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  /* Accent */
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-muted: rgba(217, 119, 6, 0.12);
+  --accent-dim: #92400e;
+  
+  /* Semantic Colors */
+  --success: #16a34a;
+  --success-muted: rgba(22, 163, 74, 0.12);
+  --error: #dc2626;
+  --error-muted: rgba(220, 38, 38, 0.12);
+  --info: #2563eb;
+  --info-muted: rgba(59, 130, 246, 0.12);
+  --warning: #d97706;
+  --warning-muted: rgba(245, 158, 11, 0.12);
+  --purple: #7c3aed;
+  --purple-muted: rgba(147, 51, 234, 0.12);
+}
+
+/* ============================================================================
+   Theme Transitions
+   ============================================================================ */
+
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+/* ============================================================================
+   Base Typography & Body
+   ============================================================================ */
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   App Layout Shell
+   ============================================================================ */
+
+.app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ============================================================================
+   Common Animations
+   ============================================================================ */
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.95); }
+}
+
+@keyframes bounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+/* ============================================================================
+   Scrollbar Base Styles
+   ============================================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--bg-surface);
+}
+
+/* ============================================================================
+   Responsive Breakpoints (Mobile)
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  :root {
+    --space-10: 24px;
+  }
+}

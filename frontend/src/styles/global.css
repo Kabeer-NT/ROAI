@@ -2981,3 +2981,115 @@ tr.row-visible {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ============================================================================
+   FIX: Grid Scroll Container - Horizontal Scrolling
+   Add this to your global.css
+   ============================================================================ */
+
+/* The component uses "grid-scroll-container" but CSS had "grid-view-scroll" */
+.grid-scroll-container {
+  flex: 1;
+  overflow: auto;  /* Enable both horizontal and vertical scrolling */
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;  /* Smooth scrolling on iOS */
+}
+
+/* Ensure the grid view container allows flex child to scroll */
+.grid-view-fullscreen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;  /* Parent should clip, child should scroll */
+  min-width: 0;      /* Allow flex child to shrink below content size */
+}
+
+/* Grid table should not constrain its width */
+.structure-grid {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: max-content;  /* Allow table to be wider than container */
+  min-width: 100%;
+  table-layout: fixed; /* Optional: can help with column sizing */
+}
+
+/* Sticky headers should work with horizontal scroll */
+.structure-grid .corner-cell {
+  background: var(--bg-elevated);
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  min-width: 40px;
+}
+
+.structure-grid .col-header {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 11px;
+  padding: var(--space-2) var(--space-1);
+  min-width: 80px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.structure-grid .row-header {
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 11px;
+  padding: var(--space-1) var(--space-2);
+  min-width: 40px;
+  width: 40px;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+/* Grid instructions bar */
+.grid-instructions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.grid-instructions .sheet-indicator {
+  color: var(--text-secondary);
+}
+
+.grid-instructions .sheet-indicator strong {
+  color: var(--accent);
+}
+
+/* Custom scrollbar styling for the grid */
+.grid-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.grid-scroll-container::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+}
+
+.grid-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 4px;
+}
+
+.grid-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* Corner piece for scrollbars */
+.grid-scroll-container::-webkit-scrollbar-corner {
+  background: var(--bg-surface);
+}
