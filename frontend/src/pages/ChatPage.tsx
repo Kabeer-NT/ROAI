@@ -5,17 +5,21 @@ import {
   LoadingMessage,
   ChatInput,
   Welcome,
+  ToastContainer,
 } from '../components'
 import { useModels, useSpreadsheets, useFileHandle, useTheme, useVisibility } from '../hooks'
 import { useChat } from '../hooks'
+import { useToast } from '../components/Toast'
 
 export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showSuggestions, setShowSuggestions] = useState(false)  // NEW: Track when to show suggestions
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { theme, toggleTheme } = useTheme()
   const { models, selectedModel, setSelectedModel } = useModels()
   const { files, isUploading, uploadFile, reuploadFile, removeFile } = useSpreadsheets()
+  const { toasts, addToast, dismissToast } = useToast()
   
   // Visibility management - now with sheet-scoped support
   const { 
@@ -29,11 +33,17 @@ export function ChatPage() {
   } = useVisibility()
 
   // Chat with visibility support
-  const { messages, isLoading, sendMessage, addSystemMessage } = useChat(
+  const { messages, isLoading, sendMessage: originalSendMessage, addSystemMessage } = useChat(
     selectedModel, 
     files,
-    { getAllSerializedVisibility }  // Pass visibility getter to useChat
+    { getAllSerializedVisibility }
   )
+
+  // Wrap sendMessage to hide suggestions after first user message
+  const sendMessage = useCallback((content: string) => {
+    setShowSuggestions(false)  // Hide suggestions when user sends first message
+    originalSendMessage(content)
+  }, [originalSendMessage])
 
   // File handle management for auto-reload
   const fileHandleMap = useRef<Map<string, string>>(new Map())
@@ -50,7 +60,7 @@ export function ChatPage() {
         .find(([_, hId]) => hId === handleId)?.[0]
       
       if (fileId) {
-        addSystemMessage(`🔄 **${file.name}** changed — reloading...`)
+        addSystemMessage(`📄 **${file.name}** changed — reloading...`)
         const updated = await reuploadFile(fileId, file)
         if (updated) {
           const sheetsSummary = updated.sheets
@@ -71,6 +81,16 @@ export function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Helper to show toast and trigger suggestions after successful upload
+  const handleUploadSuccess = useCallback((filename: string, sheetCount: number, totalRows: number) => {
+    addToast(`${filename} uploaded successfully`, 'success', 3000)
+    
+    // Show suggestions after a short delay (after toast appears)
+    setTimeout(() => {
+      setShowSuggestions(true)
+    }, 500)
+  }, [addToast])
+
   const handleFilesAddWithHandle = useCallback(async () => {
     if (!fileSystemSupported) return false
 
@@ -80,7 +100,7 @@ export function ChatPage() {
       for (const { file, handle } of results) {
         const validExtensions = ['.xlsx', '.xls', '.csv', '.tsv']
         if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
-          addSystemMessage(`❌ **${file.name}** is not a supported file type. Use .xlsx, .csv, or .tsv`)
+          addToast(`${file.name} is not a supported file type`, 'error', 4000)
           continue
         }
 
@@ -90,12 +110,11 @@ export function ChatPage() {
           storeHandle(handleId, handle, file.name, file.lastModified)
           fileHandleMap.current.set(uploaded.id, handleId)
 
-          const sheetsSummary = uploaded.sheets
-            .map(s => `**${s.name}** — ${s.rows} rows, ${s.columns} columns`)
-            .join('\n')
-          addSystemMessage(`📊 Loaded **${uploaded.filename}** (auto-reload enabled)\n\n${sheetsSummary}`)
+          // Show success toast and trigger suggestions
+          const totalRows = uploaded.sheets.reduce((sum, s) => sum + s.rows, 0)
+          handleUploadSuccess(uploaded.filename, uploaded.sheets.length, totalRows)
         } else {
-          addSystemMessage(`❌ Failed to upload **${file.name}**`)
+          addToast(`Failed to upload ${file.name}`, 'error', 4000)
         }
       }
       return true
@@ -103,32 +122,28 @@ export function ChatPage() {
       console.error('File picker error:', err)
       return false
     }
-  }, [fileSystemSupported, openMultipleFiles, uploadFile, storeHandle, addSystemMessage])
+  }, [fileSystemSupported, openMultipleFiles, uploadFile, storeHandle, handleUploadSuccess, addToast])
 
   const handleFilesAdd = useCallback(async (fileList: FileList) => {
     for (const file of Array.from(fileList)) {
       const validExtensions = ['.xlsx', '.xls', '.csv', '.tsv']
       if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
-        addSystemMessage(`❌ **${file.name}** is not a supported file type. Use .xlsx, .csv, or .tsv`)
+        addToast(`${file.name} is not a supported file type`, 'error', 4000)
         continue
       }
 
       const uploaded = await uploadFile(file)
       if (uploaded) {
-        const sheetsSummary = uploaded.sheets
-          .map(s => `**${s.name}** — ${s.rows} rows, ${s.columns} columns`)
-          .join('\n')
-        const note = fileSystemSupported ? ' (use file picker for auto-reload)' : ''
-        addSystemMessage(`📊 Loaded **${uploaded.filename}**${note}\n\n${sheetsSummary}`)
+        // Show success toast and trigger suggestions
+        const totalRows = uploaded.sheets.reduce((sum, s) => sum + s.rows, 0)
+        handleUploadSuccess(uploaded.filename, uploaded.sheets.length, totalRows)
       } else {
-        addSystemMessage(`❌ Failed to upload **${file.name}**`)
+        addToast(`Failed to upload ${file.name}`, 'error', 4000)
       }
     }
-  }, [uploadFile, addSystemMessage, fileSystemSupported])
+  }, [uploadFile, handleUploadSuccess, addToast])
 
-  // FIX: Find file by ID to get filename before clearing visibility
   const handleFileRemove = useCallback((id: string) => {
-    // Find the file to get its filename before removing
     const file = files.find(f => f.id === id)
     
     const handleId = fileHandleMap.current.get(id)
@@ -137,12 +152,16 @@ export function ChatPage() {
       fileHandleMap.current.delete(id)
     }
     
-    // FIX: Clear visibility by FILENAME, not by ID
     if (file) {
       clearVisibility(file.filename)
     }
     
     removeFile(id)
+    
+    // Hide suggestions if no files left
+    if (files.length <= 1) {
+      setShowSuggestions(false)
+    }
   }, [files, removeFile, removeHandle, clearVisibility])
 
   const handleHintClick = (hint: string) => {
@@ -153,7 +172,9 @@ export function ChatPage() {
     ? `Ask about ${files.map(f => f.filename).join(', ')}...`
     : 'Upload a spreadsheet to get started...'
 
-  
+  // Determine if we should show welcome (no messages yet)
+  const showWelcome = messages.length === 0
+
   return (
     <div className="app">
       <Sidebar
@@ -177,8 +198,12 @@ export function ChatPage() {
 
       <main className="main">
         <div className="chat-area">
-          {messages.length === 0 ? (
-            <Welcome onHintClick={handleHintClick} />
+          {showWelcome ? (
+            <Welcome 
+              onHintClick={handleHintClick} 
+              hasFiles={files.length > 0}
+              showSuggestions={showSuggestions}
+            />
           ) : (
             <div className="messages">
               {messages.map(msg => (
@@ -198,6 +223,9 @@ export function ChatPage() {
           placeholder={placeholder}
         />
       </main>
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }

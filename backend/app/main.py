@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth, chat, models, spreadsheet, conversations
+from app.routes import auth, chat, models, spreadsheet, conversations, suggestions
 from app.services.db import create_tables
 
 
@@ -41,6 +41,7 @@ app.include_router(models.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(spreadsheet.router, prefix="/api")
+app.include_router(suggestions.router, prefix="/api")
 
 
 @app.get("/health")
