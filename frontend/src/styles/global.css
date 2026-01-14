@@ -2084,3 +2084,518 @@ html.theme-transition *::after {
 [data-theme="light"] .model-option-description {
   color: rgba(0, 0, 0, 0.5);
 }
+
+/* ============================================================================
+   Visibility Toggle Styles
+   Add these to your existing CSS file
+   ============================================================================ */
+
+/* Column and row headers - clickable state */
+.structure-grid .col-header.clickable,
+.structure-grid .row-header.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  position: relative;
+}
+
+.structure-grid .col-header.clickable:hover,
+.structure-grid .row-header.clickable:hover {
+  background-color: rgba(239, 68, 68, 0.2); /* red tint on hover */
+}
+
+.structure-grid .col-header.clickable:hover .col-letter,
+.structure-grid .row-header.clickable:hover .row-number {
+  color: #ef4444;
+}
+
+/* Hidden columns and rows */
+.structure-grid .col-header.user-hidden,
+.structure-grid .row-header.user-hidden {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.structure-grid .col-header.user-hidden:hover,
+.structure-grid .row-header.user-hidden:hover {
+  background-color: rgba(34, 197, 94, 0.2); /* green tint to show "will unhide" */
+}
+
+.structure-grid .col-header.user-hidden:hover .col-letter,
+.structure-grid .row-header.user-hidden:hover .row-number {
+  color: #22c55a;
+}
+
+/* Hidden indicator icon in headers */
+.hidden-indicator {
+  margin-left: 4px;
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+/* Row that's entirely hidden */
+.structure-grid tr.row-hidden td.grid-cell {
+  opacity: 0.4;
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+/* Individual cell - user hidden state */
+.grid-cell.user-hidden {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  position: relative;
+}
+
+.grid-cell.user-hidden::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(239, 68, 68, 0.1) 3px,
+    rgba(239, 68, 68, 0.1) 6px
+  );
+  pointer-events: none;
+}
+
+.user-hidden-icon {
+  color: #ef4444 !important;
+}
+
+/* Grid cell hover states for shift+click */
+.grid-cell {
+  cursor: default;
+}
+
+.grid-cell:not(.user-hidden):hover {
+  outline: 1px dashed rgba(239, 68, 68, 0.4);
+  outline-offset: -1px;
+}
+
+.grid-cell.user-hidden:hover {
+  outline: 1px dashed rgba(34, 197, 94, 0.6);
+  outline-offset: -1px;
+}
+
+/* Reset visibility button */
+.reset-visibility-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reset-visibility-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Hidden count in grid info */
+.hidden-count {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Visibility hint in footer */
+.visibility-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.visibility-hint svg {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+/* Legend item for user-hidden */
+.legend-item.hidden-legend {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+  margin-left: 4px;
+}
+
+.legend-dot.user-hidden {
+  background: linear-gradient(135deg, #ef4444 50%, transparent 50%);
+  border: 1px solid #ef4444;
+}
+
+/* Summary view - hidden items */
+.summary-card.hidden-summary {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.summary-card.hidden-summary h3 {
+  color: #ef4444;
+}
+
+.hidden-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.hidden-label {
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.hidden-value {
+  color: #ef4444;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Tags with user-hidden state */
+.structure-tag.user-hidden {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.structure-tag.user-hidden svg {
+  margin-left: 4px;
+}
+
+/* Formula row hidden state */
+.formula-row.user-hidden {
+  opacity: 0.6;
+}
+
+.formula-row.user-hidden .formula-cell {
+  color: #ef4444;
+}
+
+.formula-hidden {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ef4444;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ============================================================================
+   Dark theme adjustments
+   ============================================================================ */
+
+[data-theme="dark"] .grid-cell.user-hidden {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+[data-theme="dark"] .structure-grid .col-header.user-hidden,
+[data-theme="dark"] .structure-grid .row-header.user-hidden {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="dark"] .reset-visibility-btn {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+[data-theme="dark"] .visibility-hint {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* ============================================================================
+   Visibility Toggle Styles
+   Add these to your existing CSS file
+   ============================================================================ */
+
+/* Column and row headers - clickable state */
+.structure-grid .col-header.clickable,
+.structure-grid .row-header.clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  user-select: none;
+  position: relative;
+}
+
+.structure-grid .col-header.clickable:hover,
+.structure-grid .row-header.clickable:hover {
+  background-color: rgba(239, 68, 68, 0.2); /* red tint on hover */
+}
+
+.structure-grid .col-header.clickable:hover .col-letter,
+.structure-grid .row-header.clickable:hover .row-number {
+  color: #ef4444;
+}
+
+/* Hidden columns and rows */
+.structure-grid .col-header.user-hidden,
+.structure-grid .row-header.user-hidden {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.structure-grid .col-header.user-hidden:hover,
+.structure-grid .row-header.user-hidden:hover {
+  background-color: rgba(34, 197, 94, 0.2); /* green tint to show "will unhide" */
+}
+
+.structure-grid .col-header.user-hidden:hover .col-letter,
+.structure-grid .row-header.user-hidden:hover .row-number {
+  color: #22c55a;
+}
+
+/* Hidden indicator icon in headers */
+.hidden-indicator {
+  margin-left: 4px;
+  opacity: 0.7;
+  vertical-align: middle;
+}
+
+/* Row that's entirely hidden */
+.structure-grid tr.row-hidden td.grid-cell {
+  opacity: 0.4;
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+/* Individual cell - user hidden state */
+.grid-cell.user-hidden {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  position: relative;
+}
+
+.grid-cell.user-hidden::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    rgba(239, 68, 68, 0.1) 3px,
+    rgba(239, 68, 68, 0.1) 6px
+  );
+  pointer-events: none;
+}
+
+.user-hidden-icon {
+  color: #ef4444 !important;
+}
+
+/* Grid cell hover states for shift+click */
+.grid-cell {
+  cursor: default;
+}
+
+.grid-cell:not(.user-hidden):hover {
+  outline: 1px dashed rgba(239, 68, 68, 0.4);
+  outline-offset: -1px;
+}
+
+.grid-cell.user-hidden:hover {
+  outline: 1px dashed rgba(34, 197, 94, 0.6);
+  outline-offset: -1px;
+}
+
+/* Reset visibility button */
+.reset-visibility-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #ef4444;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reset-visibility-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* Hidden count in grid info */
+.hidden-count {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Visibility hint in footer */
+.visibility-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.visibility-hint svg {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+/* Legend item for user-hidden */
+.legend-item.hidden-legend {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+  margin-left: 4px;
+}
+
+.legend-dot.user-hidden {
+  background: linear-gradient(135deg, #ef4444 50%, transparent 50%);
+  border: 1px solid #ef4444;
+}
+
+/* Summary view - hidden items */
+.summary-card.hidden-summary {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.summary-card.hidden-summary h3 {
+  color: #ef4444;
+}
+
+.hidden-item {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.hidden-label {
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.hidden-value {
+  color: #ef4444;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Tags with user-hidden state */
+.structure-tag.user-hidden {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.structure-tag.user-hidden svg {
+  margin-left: 4px;
+}
+
+/* Formula row hidden state */
+.formula-row.user-hidden {
+  opacity: 0.6;
+}
+
+.formula-row.user-hidden .formula-cell {
+  color: #ef4444;
+}
+
+.formula-hidden {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #ef4444;
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ============================================================================
+   Dark theme adjustments
+   ============================================================================ */
+
+[data-theme="dark"] .grid-cell.user-hidden {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+[data-theme="dark"] .structure-grid .col-header.user-hidden,
+[data-theme="dark"] .structure-grid .row-header.user-hidden {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="dark"] .reset-visibility-btn {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+[data-theme="dark"] .visibility-hint {
+  background: rgba(99, 102, 241, 0.15);
+}
+/* ============================================================================
+   Additional Sidebar Visibility Styles
+   Add these to your existing CSS
+   ============================================================================ */
+
+/* Visibility indicator in sidebar */
+.visibility-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.visibility-indicator svg {
+  flex-shrink: 0;
+}
+
+/* File card with hidden items */
+.file-card.has-hidden {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.file-card.has-hidden .file-icon {
+  color: #f59e0b !important; /* Orange to indicate modified */
+}
+
+/* Hidden badge in file meta */
+.hidden-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: rgba(239, 68, 68, 0.15);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.hidden-badge svg {
+  flex-shrink: 0;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .visibility-indicator {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+[data-theme="dark"] .hidden-badge {
+  background: rgba(239, 68, 68, 0.2);
+}
