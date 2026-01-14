@@ -6,7 +6,8 @@ import {
   ChatInput,
   Welcome,
 } from '../components'
-import { useModels, useSpreadsheets, useChat, useFileHandle, useTheme } from '../hooks'
+import { useModels, useSpreadsheets, useFileHandle, useTheme, useVisibility } from '../hooks'
+import { useChat } from '../hooks'
 
 export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -15,7 +16,24 @@ export function ChatPage() {
   const { theme, toggleTheme } = useTheme()
   const { models, selectedModel, setSelectedModel } = useModels()
   const { files, isUploading, uploadFile, reuploadFile, removeFile } = useSpreadsheets()
-  const { messages, isLoading, sendMessage, addSystemMessage } = useChat(selectedModel, files)
+  
+  // Visibility management - now with sheet-scoped support
+  const { 
+    getFileVisibility,
+    setFileVisibility,
+    getSheetVisibility,
+    setSheetVisibility,
+    clearVisibility,
+    getAllSerializedVisibility,
+    stats: visibilityStats 
+  } = useVisibility()
+
+  // Chat with visibility support
+  const { messages, isLoading, sendMessage, addSystemMessage } = useChat(
+    selectedModel, 
+    files,
+    { getAllSerializedVisibility }  // Pass visibility getter to useChat
+  )
 
   // File handle management for auto-reload
   const fileHandleMap = useRef<Map<string, string>>(new Map())
@@ -108,14 +126,24 @@ export function ChatPage() {
     }
   }, [uploadFile, addSystemMessage, fileSystemSupported])
 
+  // FIX: Find file by ID to get filename before clearing visibility
   const handleFileRemove = useCallback((id: string) => {
+    // Find the file to get its filename before removing
+    const file = files.find(f => f.id === id)
+    
     const handleId = fileHandleMap.current.get(id)
     if (handleId) {
       removeHandle(handleId)
       fileHandleMap.current.delete(id)
     }
+    
+    // FIX: Clear visibility by FILENAME, not by ID
+    if (file) {
+      clearVisibility(file.filename)
+    }
+    
     removeFile(id)
-  }, [removeFile, removeHandle])
+  }, [files, removeFile, removeHandle, clearVisibility])
 
   const handleHintClick = (hint: string) => {
     sendMessage(hint)
@@ -125,6 +153,7 @@ export function ChatPage() {
     ? `Ask about ${files.map(f => f.filename).join(', ')}...`
     : 'Upload a spreadsheet to get started...'
 
+  
   return (
     <div className="app">
       <Sidebar
@@ -141,6 +170,9 @@ export function ChatPage() {
         isReloading={isReloading}
         theme={theme}
         onThemeToggle={toggleTheme}
+        getFileVisibility={getFileVisibility}
+        setFileVisibility={setFileVisibility}
+        visibilityStats={visibilityStats}
       />
 
       <main className="main">
