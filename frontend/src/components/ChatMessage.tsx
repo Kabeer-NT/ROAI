@@ -3,12 +3,16 @@ import ReactMarkdown from 'react-markdown'
 import { Copy, Check, User, Hexagon } from 'lucide-react'
 import type { Message } from '../types'
 import { ThinkingBlock } from './ThinkingBlock'
+import { FollowupChips } from './FollowUpChips'
 
 interface ChatMessageProps {
   message: Message
+  onFollowupClick?: (text: string) => void
+  isLatest?: boolean  // Only show followups on the latest assistant message
+  disabled?: boolean
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, onFollowupClick, isLatest = false, disabled = false }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
 
   const formatTime = (date: Date) => {
@@ -24,6 +28,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
       console.error('Failed to copy:', err)
     }
   }
+
+  const showFollowups = 
+    message.role === 'assistant' && 
+    isLatest && 
+    message.followups && 
+    message.followups.length > 0 &&
+    onFollowupClick
 
   return (
     <div className={`message ${message.role}`}>
@@ -70,6 +81,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
             {message.content}
           </ReactMarkdown>
         </div>
+
+        {/* Show followup chips for the latest assistant message */}
+        {showFollowups && (
+          <FollowupChips
+            followups={message.followups!}
+            onFollowupClick={onFollowupClick!}
+            disabled={disabled}
+            className="message-followups"
+          />
+        )}
       </div>
     </div>
   )
