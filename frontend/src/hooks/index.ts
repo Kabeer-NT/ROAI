@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Message, SpreadsheetFile, ToolCall } from '../types'
+import type { Message, SpreadsheetFile, ToolCall, WebSource, ChatResponse, Followup } from '../types'
 import { useAuth } from './useAuth'
-import type { Followup } from '../components/FollowUpChips'
 
 export { useAuth, AuthProvider } from './useAuth'
 export { useFileHandle } from './useFileHandle'
@@ -173,20 +172,8 @@ interface UseChatOptions {
 }
 
 // ============================================================================
-// Chat Response
+// useChat Hook - Updated for sources and better error handling
 // ============================================================================
-
-interface ChatResponse {
-  response: string
-  tool_calls?: ToolCall[]
-  followups?: Followup[] | string[]
-  error?: {
-    type: string
-    icon: string
-    message: string
-    suggestions: string[]
-  }
-}
 
 export function useChat(
   selectedModel: string, 
@@ -220,6 +207,7 @@ export function useChat(
           .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
           .map(m => ({ role: m.role, content: m.content })),
         model: selectedModel,
+        include_followups: true,
         ...(hasVisibility && { visibility }),
       }
 
@@ -234,28 +222,57 @@ export function useChat(
 
       const data: ChatResponse = await res.json()
       
-      if (!res.ok) {
-        // Check for friendly error
-        if (data.error && data.error.type === 'friendly_error') {
-          const errorContent = `${data.error.icon} **${data.error.message}**\n\n${data.error.suggestions.map(s => `• ${s}`).join('\n')}`
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: errorContent,
-            timestamp: new Date(),
-          }
-          setMessages(prev => [...prev, errorMessage])
-          return
+      // Check for error in response (backend now returns 200 with error field)
+      if (data.error) {
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: data.error.message || 'Something went wrong. Please try again.',
+          timestamp: new Date(),
+          // Include error suggestions as followups
+          followups: data.error.suggestions?.map(s => ({ text: s, type: 'followup' as const })),
         }
+        setMessages(prev => [...prev, errorMessage])
+        return
+      }
+      
+      if (!res.ok) {
         throw new Error((data as any).detail || 'Request failed')
       }
       
-      const toolCalls: ToolCall[] = data.tool_calls || []
+      // Extract tool calls with sources
+      const toolCalls: ToolCall[] = (data.tool_calls || []).map(tc => {
+        // Debug: log what we're receiving
+        console.log('Tool call from backend:', tc)
+        return {
+          ...tc,
+          sources: tc.sources || []
+        }
+      })
+      
+      // Debug: log the processed tool calls
+      if (toolCalls.length > 0) {
+        console.log('Processed tool calls with sources:', toolCalls)
+      }
       
       // Normalize followups to Followup[] format
       const followups: Followup[] | undefined = data.followups?.map(f => 
         typeof f === 'string' ? { text: f, type: 'followup' as const } : f
       )
+      
+      // Collect all sources (from tool calls + top-level)
+      const allSources: WebSource[] = [
+        ...(data.sources || []),
+        ...toolCalls.flatMap(tc => tc.sources || [])
+      ]
+      
+      // Deduplicate sources by URL
+      const uniqueSources = allSources.reduce((acc, source) => {
+        if (!acc.find(s => s.url === source.url)) {
+          acc.push(source)
+        }
+        return acc
+      }, [] as WebSource[])
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -264,14 +281,19 @@ export function useChat(
         timestamp: new Date(),
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         followups: followups && followups.length > 0 ? followups : undefined,
+        sources: uniqueSources.length > 0 ? uniqueSources : undefined,
       }
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Error: ${error}`,
+        content: `Something went wrong: ${error}`,
         timestamp: new Date(),
+        followups: [
+          { text: 'Try asking again', type: 'followup' },
+          { text: 'Ask a simpler question', type: 'followup' }
+        ]
       }
       setMessages(prev => [...prev, errorMessage])
     } finally {

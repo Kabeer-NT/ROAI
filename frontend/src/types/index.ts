@@ -2,6 +2,18 @@
 // Core Types
 // ============================================================================
 
+/**
+ * Web source citation from search results
+ */
+export interface WebSource {
+  url: string
+  title: string
+  snippet: string
+}
+
+/**
+ * Tool call made during chat processing
+ */
 export interface ToolCall {
   type: 'formula' | 'pandas' | 'web_search'
   formula?: string
@@ -9,20 +21,28 @@ export interface ToolCall {
   query?: string
   sheet?: string
   result: any
+  sources?: WebSource[]  // Sources from web_search type
 }
 
+/**
+ * Follow-up suggestion
+ */
 export interface Followup {
   text: string
   type?: 'followup' | 'drill_down' | 'compare' | 'explore'
 }
 
+/**
+ * Chat message
+ */
 export interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
   toolCalls?: ToolCall[]
-  followups?: Followup[]  // NEW: Follow-up suggestions
+  followups?: Followup[]
+  sources?: WebSource[]  // Top-level sources for easy access
 }
 
 export interface SheetInfo {
@@ -58,8 +78,8 @@ export interface QuickAction {
 }
 
 export interface FriendlyError {
-  type: 'friendly_error'
-  icon: string
+  type: string
+  icon?: string
   message: string
   suggestions: string[]
 }
@@ -75,8 +95,11 @@ export interface UploadResponse {
 
 export interface ChatResponse {
   response: string
+  model: string
+  conversation_id?: number
   tool_calls?: ToolCall[]
   followups?: Followup[] | string[]
+  sources?: WebSource[]  // Top-level sources
   error?: FriendlyError
 }
 
