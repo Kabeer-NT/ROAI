@@ -1238,3 +1238,109 @@
 @media (max-width: 768px) {
   .sidebar.open { width: 260px; }
 }
+
+
+/* ============================================================================
+   FOLLOWUP CHIPS CSS
+   Styles for follow-up suggestions after AI responses
+   Add this to your existing CSS or append to features.css
+   ============================================================================ */
+
+/* ============================================================================
+   Followup Chips - Appears after assistant responses
+   ============================================================================ */
+
+.followup-chips {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.followup-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.followup-header .followup-icon {
+  color: var(--accent);
+}
+
+.followup-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.followup-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.followup-chip:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.followup-chip:hover:not(:disabled) .chip-arrow {
+  transform: translateX(2px);
+  color: var(--accent);
+}
+
+.followup-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.followup-chip.clicked {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
+.followup-chip .chip-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.followup-chip .chip-text {
+  flex: 1;
+}
+
+.followup-chip .chip-arrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+/* Message-specific followups */
+.message-followups {
+  margin-top: var(--space-4);
+}
+
+/* ============================================================================
+   Responsive adjustments
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .followup-chip {
+    padding: var(--space-2) var(--space-3);
+    font-size: 12px;
+  }
+}
