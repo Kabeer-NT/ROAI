@@ -1,10 +1,17 @@
 """
-Claude Service - Stateless Two-Call Architecture with Visibility Support
-=========================================================================
-Call 1 (ANALYZE): Claude sees structure, returns action plan as JSON
-Call 2 (FORMAT): Claude formats results into a nice response
+Claude Service - OPTIMIZED VERSION
+===================================
+Performance optimizations:
+1. HTTP connection pooling (reuse connections)
+2. HTTP/2 support for multiplexing
+3. Async CPU offloading for spreadsheet operations
+4. Proper lifecycle management
 
-Now supports visibility settings to hide user-specified data from AI.
+Original features preserved:
+- Two-call stateless architecture (ANALYZE -> EXECUTE -> FORMAT)
+- Visibility support
+- Web search integration
+- Rate limit handling with retry
 """
 
 import httpx
@@ -14,9 +21,13 @@ from typing import Optional, Any
 from app.config import ANTHROPIC_API_KEY, CLAUDE_MODEL
 from app.services.spreadsheet import (
     build_llm_context,
+    build_llm_context_async,
     execute_formula,
+    execute_formula_async,
     execute_python_query,
+    execute_python_query_async,
     list_available_files,
+    set_current_visibility,
 )
 from app.services.prompts import ANALYZE_PROMPT_ENHANCED as ANALYZE_PROMPT, FORMAT_PROMPT_ENHANCED as FORMAT_PROMPT
 
@@ -27,6 +38,47 @@ ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 MAX_RETRIES = 3
 INITIAL_RETRY_DELAY = 2.0
 MAX_RETRY_DELAY = 60.0
+
+
+# =============================================================================
+# HTTP CLIENT POOLING
+# =============================================================================
+
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """
+    Get or create shared HTTP client with connection pooling.
+    Reuses TCP connections and supports HTTP/2 multiplexing.
+    """
+    global _http_client
+    
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=10.0,      # Connection timeout
+                read=60.0,         # Read timeout
+                write=30.0,        # Write timeout
+                pool=5.0,          # Pool timeout
+            ),
+            limits=httpx.Limits(
+                max_keepalive_connections=10,  # Keep 10 connections alive
+                max_connections=20,             # Max 20 total connections
+                keepalive_expiry=30.0,          # Keep connections for 30s
+            ),
+            http2=True,  # Enable HTTP/2 for multiplexing
+        )
+    
+    return _http_client
+
+
+async def close_http_client():
+    """Close HTTP client. Call on application shutdown."""
+    global _http_client
+    if _http_client is not None:
+        await _http_client.aclose()
+        _http_client = None
 
 
 # =============================================================================
@@ -42,49 +94,72 @@ async def _api_call(
     messages: list[dict],
     system: str,
     max_tokens: int = 1024,
+    tools: list = None,
 ) -> dict:
-    """Make a single API call."""
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        response = await client.post(
-            ANTHROPIC_API_URL,
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-            },
-            json={
-                "model": CLAUDE_MODEL,
-                "max_tokens": max_tokens,
-                "system": system,
-                "messages": messages
-            }
-        )
-        
-        if response.status_code == 429:
-            retry_after = response.headers.get("retry-after")
-            raise RateLimitError(float(retry_after) if retry_after else None)
-        
-        response.raise_for_status()
-        return response.json()
+    """Make a single API call using pooled connection."""
+    client = get_http_client()
+    
+    payload = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": messages
+    }
+    
+    if tools:
+        payload["tools"] = tools
+    
+    response = await client.post(
+        ANTHROPIC_API_URL,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+        },
+        json=payload
+    )
+    
+    if response.status_code == 429:
+        retry_after = response.headers.get("retry-after")
+        raise RateLimitError(float(retry_after) if retry_after else None)
+    
+    response.raise_for_status()
+    return response.json()
 
 
 async def _api_call_with_retry(
     messages: list[dict],
     system: str,
     max_tokens: int = 1024,
+    tools: list = None,
 ) -> dict:
-    """API call with retry on rate limit."""
+    """API call with exponential backoff retry on rate limit."""
+    last_error = None
+    
     for attempt in range(MAX_RETRIES):
         try:
-            return await _api_call(messages, system, max_tokens)
+            return await _api_call(messages, system, max_tokens, tools)
         except RateLimitError as e:
+            last_error = e
             if attempt < MAX_RETRIES - 1:
-                delay = min(e.retry_after or INITIAL_RETRY_DELAY * (2 ** attempt), MAX_RETRY_DELAY)
-                print(f"⚠️  Rate limited, waiting {delay:.0f}s...")
+                delay = min(
+                    e.retry_after or INITIAL_RETRY_DELAY * (2 ** attempt),
+                    MAX_RETRY_DELAY
+                )
+                print(f"⚠️  Rate limited, waiting {delay:.0f}s (attempt {attempt + 1}/{MAX_RETRIES})")
                 await asyncio.sleep(delay)
             else:
                 raise
-    raise RateLimitError()
+        except httpx.TimeoutException as e:
+            last_error = e
+            if attempt < MAX_RETRIES - 1:
+                delay = INITIAL_RETRY_DELAY * (2 ** attempt)
+                print(f"⚠️  Timeout, retrying in {delay:.0f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                await asyncio.sleep(delay)
+            else:
+                raise
+    
+    raise last_error or RateLimitError()
 
 
 def _extract_text(response: dict) -> str:
@@ -131,11 +206,11 @@ def _extract_json_from_response(text: str) -> dict | None:
 
 
 # =============================================================================
-# EXECUTION ENGINE
+# EXECUTION ENGINE (ASYNC OPTIMIZED)
 # =============================================================================
 
 async def _execute_action(action: dict, file_id: str) -> dict:
-    """Execute a single action and return result."""
+    """Execute a single action and return result. Uses async versions."""
     action_type = action.get("action")
     print(f"   Executing: {action_type}")
     
@@ -143,13 +218,15 @@ async def _execute_action(action: dict, file_id: str) -> dict:
         formula = action.get("formula", "")
         sheet = action.get("sheet")
         print(f"   Formula: {formula} on {sheet}")
-        result = execute_formula(formula, file_id, sheet)
+        # Use async version to not block event loop
+        result = await execute_formula_async(formula, file_id, sheet)
         return {"type": "formula", "formula": formula, "result": result}
     
     elif action_type == "pandas":
         code = action.get("code", "")
         print(f"   Code: {code[:80]}...")
-        result = execute_python_query(code, file_id)
+        # Use async version to not block event loop
+        result = await execute_python_query_async(code, file_id)
         return {"type": "pandas", "code": code, "result": result}
     
     elif action_type == "web_search":
@@ -161,11 +238,14 @@ async def _execute_action(action: dict, file_id: str) -> dict:
         steps = action.get("steps", [])
         print(f"   Multi-step: {len(steps)} steps")
         results = {}
+        
+        # Execute steps - could parallelize independent steps in future
         for i, step in enumerate(steps):
             label = step.get("label", f"step_{i}")
             print(f"   Step {i+1}/{len(steps)}: {label}")
             step_result = await _execute_action(step, file_id)
             results[label] = step_result.get("result")
+        
         return {"type": "multi", "results": results}
     
     elif action_type == "none":
@@ -178,80 +258,88 @@ async def _execute_action(action: dict, file_id: str) -> dict:
 async def _do_web_search(query: str) -> str:
     """Execute web search using Claude's web_search tool with proper tool loop."""
     print(f"   🔍 Web search: {query}")
+    
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                ANTHROPIC_API_URL,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": ANTHROPIC_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                },
-                json={
-                    "model": CLAUDE_MODEL,
-                    "max_tokens": 1024,
-                    "tools": [{"type": "web_search_20250305", "name": "web_search"}],
-                    "messages": [{"role": "user", "content": f"Search for: {query}. Return only the key facts, be very brief."}]
-                }
-            )
+        client = get_http_client()
+        
+        initial_message = {
+            "role": "user",
+            "content": f"Search for: {query}. Return only the key facts, be very brief."
+        }
+        
+        response = await client.post(
+            ANTHROPIC_API_URL,
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            json={
+                "model": CLAUDE_MODEL,
+                "max_tokens": 1024,
+                "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+                "messages": [initial_message]
+            }
+        )
+        
+        if response.status_code == 429:
+            retry_after = response.headers.get("retry-after", "60")
+            print(f"   ⚠️ Web search rate limited, retry after {retry_after}s")
+            return f"Rate limited - please wait {retry_after}s"
+        
+        response.raise_for_status()
+        data = response.json()
+        
+        messages = [initial_message]
+        
+        # Handle tool use loop (max 3 iterations)
+        for _ in range(3):
+            if data.get("stop_reason") == "end_turn":
+                break
             
-            if response.status_code == 429:
-                retry_after = response.headers.get("retry-after", "60")
-                print(f"   ⚠️ Web search rate limited, retry after {retry_after}s")
-                return f"Rate limited - please wait {retry_after}s"
-            
-            response.raise_for_status()
-            data = response.json()
-            
-            messages = [{"role": "user", "content": f"Search for: {query}. Return only the key facts, be very brief."}]
-            
-            for _ in range(3):
-                if data.get("stop_reason") == "end_turn":
-                    break
-                    
-                if data.get("stop_reason") == "tool_use":
-                    assistant_content = data.get("content", [])
-                    messages.append({"role": "assistant", "content": assistant_content})
-                    
-                    tool_results = []
-                    for block in assistant_content:
-                        if block.get("type") == "tool_use":
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": block.get("id"),
-                                "content": "Search completed - please summarize the results briefly."
-                            })
-                    
-                    if tool_results:
-                        messages.append({"role": "user", "content": tool_results})
-                    
-                    response = await client.post(
-                        ANTHROPIC_API_URL,
-                        headers={
-                            "Content-Type": "application/json",
-                            "x-api-key": ANTHROPIC_API_KEY,
-                            "anthropic-version": "2023-06-01",
-                        },
-                        json={
-                            "model": CLAUDE_MODEL,
-                            "max_tokens": 512,
-                            "tools": [{"type": "web_search_20250305", "name": "web_search"}],
-                            "messages": messages
-                        }
-                    )
-                    
-                    if response.status_code == 429:
-                        return "Rate limited during search"
-                    
-                    response.raise_for_status()
-                    data = response.json()
-                else:
-                    break
-            
-            result = _extract_text(data)
-            print(f"   ✓ Search complete: {result[:100]}...")
-            return result if result else "No results found"
-            
+            if data.get("stop_reason") == "tool_use":
+                assistant_content = data.get("content", [])
+                messages.append({"role": "assistant", "content": assistant_content})
+                
+                tool_results = []
+                for block in assistant_content:
+                    if block.get("type") == "tool_use":
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.get("id"),
+                            "content": "Search completed - please summarize the results briefly."
+                        })
+                
+                if tool_results:
+                    messages.append({"role": "user", "content": tool_results})
+                
+                response = await client.post(
+                    ANTHROPIC_API_URL,
+                    headers={
+                        "Content-Type": "application/json",
+                        "x-api-key": ANTHROPIC_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                    },
+                    json={
+                        "model": CLAUDE_MODEL,
+                        "max_tokens": 512,
+                        "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+                        "messages": messages
+                    }
+                )
+                
+                if response.status_code == 429:
+                    return "Rate limited during search"
+                
+                response.raise_for_status()
+                data = response.json()
+            else:
+                break
+        
+        result = _extract_text(data)
+        print(f"   ✓ Search complete: {result[:100]}...")
+        return result if result else "No results found"
+        
     except httpx.TimeoutException:
         print(f"   ⚠️ Web search timed out")
         return "Search timed out - try again"
@@ -265,16 +353,22 @@ async def _do_web_search(query: str) -> str:
 # =============================================================================
 
 async def list_models() -> dict:
+    """List available models."""
     return {"models": [CLAUDE_MODEL], "default": CLAUDE_MODEL}
 
 
 async def chat(
-    messages: list[dict], 
+    messages: list[dict],
     model: Optional[str] = None,
     visibility: Optional[dict] = None
 ) -> dict:
     """
     Two-call stateless chat with visibility support.
+    
+    Optimizations:
+    - Uses connection pooling for API calls
+    - Async CPU offloading for spreadsheet operations
+    - Cached workbooks and compiled visibility
     
     Args:
         messages: Chat messages
@@ -294,8 +388,11 @@ async def chat(
     files = list_available_files()
     file_id = files[0]["file_id"] if files else None
     
-    # Build context for analysis (with visibility filtering)
-    spreadsheet_context = build_llm_context(visibility=visibility) or "No spreadsheet loaded."
+    # Set visibility for execution
+    set_current_visibility(visibility)
+    
+    # Build context for analysis (async to not block)
+    spreadsheet_context = await build_llm_context_async(visibility) or "No spreadsheet loaded."
     
     tool_calls_made = []
     
@@ -319,14 +416,11 @@ async def chat(
         
         # Parse the action plan
         action_text = _extract_text(analyze_response).strip()
-        
-        # Try to extract JSON using robust parsing
         action_plan = _extract_json_from_response(action_text)
         
         if action_plan is None:
             print(f"   ⚠️ No JSON found in response")
             print(f"   Raw response: {action_text[:200]}")
-            # Return the raw response as a fallback
             return {
                 "response": action_text,
                 "model": CLAUDE_MODEL,
@@ -336,7 +430,7 @@ async def chat(
         print(f"   Action: {action_plan.get('action')}")
         
         # =====================================================================
-        # EXECUTE: Run the action plan locally
+        # EXECUTE: Run the action plan (async)
         # =====================================================================
         print("⚡ Executing action plan...")
         
@@ -349,7 +443,7 @@ async def chat(
         
         execution_result = await _execute_action(action_plan, file_id)
         
-        # Format tool calls for frontend compatibility
+        # Format tool calls for frontend
         if execution_result.get("type") == "multi":
             for label, result in execution_result.get("results", {}).items():
                 tool_calls_made.append({
@@ -405,10 +499,37 @@ Computed result: {json.dumps(result_summary, default=str)}"""
             "error": "rate_limit"
         }
     except httpx.TimeoutException:
-        return {"response": "Request timed out.", "model": CLAUDE_MODEL, "error": "timeout"}
+        return {
+            "response": "Request timed out. Please try again.",
+            "model": CLAUDE_MODEL,
+            "error": "timeout"
+        }
     except httpx.HTTPStatusError as e:
-        return {"response": f"API error: {e.response.status_code}", "model": CLAUDE_MODEL, "error": f"http_{e.response.status_code}"}
+        return {
+            "response": f"API error: {e.response.status_code}",
+            "model": CLAUDE_MODEL,
+            "error": f"http_{e.response.status_code}"
+        }
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return {"response": f"Error: {str(e)}", "model": CLAUDE_MODEL, "error": "unknown"}
+        return {
+            "response": f"Error: {str(e)}",
+            "model": CLAUDE_MODEL,
+            "error": "unknown"
+        }
+
+
+# =============================================================================
+# LIFECYCLE MANAGEMENT
+# =============================================================================
+
+async def startup():
+    """Call on application startup."""
+    # Pre-warm the HTTP client
+    get_http_client()
+
+
+async def shutdown():
+    """Call on application shutdown."""
+    await close_http_client()
