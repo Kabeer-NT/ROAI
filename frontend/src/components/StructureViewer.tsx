@@ -12,7 +12,7 @@ interface SheetStructure {
   headers: Record<string, string>
   row_labels: Record<string, string>
   text_values?: Record<string, string>
-  numeric_values?: Record<string, number>  // NEW: for showing whitelisted numbers
+  numeric_values?: Record<string, number>
   formulas: Record<string, string>
   cell_type_counts: Record<string, number>
   cell_types?: Record<string, string>
@@ -163,18 +163,16 @@ export function StructureViewer({
     return () => { document.removeEventListener('keydown', handleEscape); document.body.style.overflow = '' }
   }, [isOpen, onClose])
 
-  // Toggle column: if hidden->unhide, if visible->remove from whitelist, else add to hidden
   const toggleColumn = useCallback((col: string) => {
     const vis = currentSheetVisibility
     const newHidden = new Set(vis.hiddenColumns)
     const newVisible = new Set(vis.visibleColumns)
     
     if (newHidden.has(col)) {
-      newHidden.delete(col) // Unhide
+      newHidden.delete(col)
     } else if (newVisible.has(col)) {
-      newVisible.delete(col) // Remove from whitelist
+      newVisible.delete(col)
     } else {
-      // Add to whitelist (to show numbers) - this is the "unhide default" action
       newVisible.add(col)
     }
     setCurrentSheetVisibility({ ...vis, hiddenColumns: newHidden, visibleColumns: newVisible })
@@ -195,7 +193,6 @@ export function StructureViewer({
     setCurrentSheetVisibility({ ...vis, hiddenRows: newHidden, visibleRows: newVisible })
   }, [currentSheetVisibility, setCurrentSheetVisibility])
 
-  // Toggle cell based on current state and cell type
   const toggleCell = useCallback((cellAddr: string, isNumeric: boolean) => {
     const vis = currentSheetVisibility
     const newHiddenCells = new Set(vis.hiddenCells)
@@ -207,22 +204,17 @@ export function StructureViewer({
     const isWL = isWhitelisted(cellAddr, col, row, vis)
     
     if (isHidden) {
-      // Currently extra-hidden -> unhide
       newHiddenCells.delete(cellAddr)
     } else if (isWL) {
-      // Currently whitelisted -> remove from whitelist (re-hide numbers)
       newVisibleCells.delete(cellAddr)
     } else if (isNumeric) {
-      // Numeric cell, not in any list -> whitelist it (show the number)
       newVisibleCells.add(cellAddr)
     } else {
-      // Text cell -> hide it
       newHiddenCells.add(cellAddr)
     }
     setCurrentSheetVisibility({ ...vis, hiddenCells: newHiddenCells, visibleCells: newVisibleCells })
   }, [currentSheetVisibility, setCurrentSheetVisibility])
 
-  // Bulk toggle for drag selection
   const toggleCells = useCallback((cells: Array<{ addr: string; isNumeric: boolean }>, mode: 'show' | 'hide') => {
     const vis = currentSheetVisibility
     const newHiddenCells = new Set(vis.hiddenCells)
@@ -255,7 +247,6 @@ export function StructureViewer({
   const currentSheet = structure?.structures?.[activeSheet]
   const sheetHidden = countHidden(currentSheetVisibility)
   const sheetVisible = countVisible(currentSheetVisibility)
-  const totalChanges = isUsingNewSystem ? countFileHidden(fileVisibility) + countFileVisible(fileVisibility) : sheetHidden + sheetVisible
 
   return (
     <div className="structure-viewer-fullscreen">
@@ -291,8 +282,8 @@ export function StructureViewer({
             </button>
           )}
           <div className="view-mode-toggle">
-            <button className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><Grid size={16} /></button>
-            <button className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`} onClick={() => setViewMode('summary')}><Type size={16} /></button>
+            <button className={`mode-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="Grid View"><Grid size={16} /></button>
+            <button className={`mode-btn ${viewMode === 'summary' ? 'active' : ''}`} onClick={() => setViewMode('summary')} title="Summary View"><Type size={16} /></button>
           </div>
           <button className="structure-close-btn" onClick={onClose}><X size={20} /></button>
         </div>
@@ -318,7 +309,7 @@ export function StructureViewer({
 }
 
 // ============================================================================
-// Grid View with Drag Selection
+// Grid View with Drag Selection and Resizable Columns
 // ============================================================================
 
 interface GridViewProps {
@@ -333,12 +324,31 @@ interface GridViewProps {
 
 function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, onToggleCell, onToggleCells }: GridViewProps) {
   const maxRows = Math.min(sheet.rows, 100)
-  const maxCols = Math.min(sheet.cols, 26)
+  const maxCols = Math.min(sheet.cols, 100)  // Support up to 100 columns (A-CV)
   
+  // Selection state
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState<{ col: number; row: number } | null>(null)
   const [dragEnd, setDragEnd] = useState<{ col: number; row: number } | null>(null)
   const [dragMode, setDragMode] = useState<'show' | 'hide'>('show')
+  
+  // Column width state
+  const [columnWidths, setColumnWidths] = useState<Record<number, number>>({})
+  const [rowHeights, setRowHeights] = useState<Record<number, number>>({})
+  const [resizingCol, setResizingCol] = useState<number | null>(null)
+  const [resizingRow, setResizingRow] = useState<number | null>(null)
+  const resizeStartX = useRef<number>(0)
+  const resizeStartY = useRef<number>(0)
+  const resizeStartWidth = useRef<number>(0)
+  const resizeStartHeight = useRef<number>(0)
+  
+  const DEFAULT_COL_WIDTH = 120
+  const DEFAULT_ROW_HEIGHT = 36
+  const MIN_COL_WIDTH = 50
+  const MIN_ROW_HEIGHT = 24
+
+  const getColWidth = (colIdx: number) => columnWidths[colIdx] ?? DEFAULT_COL_WIDTH
+  const getRowHeight = (rowIdx: number) => rowHeights[rowIdx] ?? DEFAULT_ROW_HEIGHT
 
   const getCellInfo = (rowIdx: number, colIdx: number): { type: string; content: string; isNumeric: boolean; numericValue?: number } => {
     const col = getColumnLetter(colIdx)
@@ -348,7 +358,6 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
     if (sheet.row_labels?.[addr]) return { type: 'label', content: sheet.row_labels[addr], isNumeric: false }
     if (sheet.formulas?.[addr]) return { type: 'formula', content: sheet.formulas[addr], isNumeric: false }
     if (sheet.text_values?.[addr]) return { type: 'text', content: sheet.text_values[addr], isNumeric: false }
-    // Check for numeric value
     const numericValue = sheet.numeric_values?.[addr]
     if (cellType === 'numeric' || numericValue !== undefined) {
       return { type: 'numeric', content: '', isNumeric: true, numericValue }
@@ -378,14 +387,14 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
     return colIdx >= minCol && colIdx <= maxCol && rowIdx >= minRow && rowIdx <= maxRow
   }
 
-  const handleMouseDown = (e: React.MouseEvent, colIdx: number, rowIdx: number) => {
-    if (e.button !== 0) return
+  // Cell selection handlers
+  const handleCellMouseDown = (e: React.MouseEvent, colIdx: number, rowIdx: number) => {
+    if (e.button !== 0 || resizingCol !== null || resizingRow !== null) return
     e.preventDefault()
     const addr = `${getColumnLetter(colIdx)}${rowIdx + 1}`
     const col = getColumnLetter(colIdx)
     const info = getCellInfo(rowIdx, colIdx)
     
-    // Determine mode: if cell is currently "shown" (whitelisted or text), we hide. Otherwise we show.
     const isHidden = isUserHidden(addr, col, rowIdx + 1, visibility)
     const isWL = isWhitelisted(addr, col, rowIdx + 1, visibility)
     const isCurrentlyShown = isWL || (!info.isNumeric && !isHidden)
@@ -396,7 +405,7 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
     setDragMode(isCurrentlyShown ? 'hide' : 'show')
   }
 
-  const handleMouseEnter = (colIdx: number, rowIdx: number) => {
+  const handleCellMouseEnter = (colIdx: number, rowIdx: number) => {
     if (isDragging) setDragEnd({ col: colIdx, row: rowIdx })
   }
 
@@ -412,35 +421,85 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
       setDragStart(null)
       setDragEnd(null)
     }
-  }, [isDragging, getSelectedCells, dragMode, onToggleCell, onToggleCells])
+    
+    // End resize
+    if (resizingCol !== null) setResizingCol(null)
+    if (resizingRow !== null) setResizingRow(null)
+  }, [isDragging, getSelectedCells, dragMode, onToggleCell, onToggleCells, resizingCol, resizingRow])
+
+  // Column resize handlers
+  const handleColResizeStart = (e: React.MouseEvent, colIdx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setResizingCol(colIdx)
+    resizeStartX.current = e.clientX
+    resizeStartWidth.current = getColWidth(colIdx)
+  }
+
+  // Row resize handlers
+  const handleRowResizeStart = (e: React.MouseEvent, rowIdx: number) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setResizingRow(rowIdx)
+    resizeStartY.current = e.clientY
+    resizeStartHeight.current = getRowHeight(rowIdx)
+  }
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (resizingCol !== null) {
+      const delta = e.clientX - resizeStartX.current
+      const newWidth = Math.max(MIN_COL_WIDTH, resizeStartWidth.current + delta)
+      setColumnWidths(prev => ({ ...prev, [resizingCol]: newWidth }))
+    }
+    if (resizingRow !== null) {
+      const delta = e.clientY - resizeStartY.current
+      const newHeight = Math.max(MIN_ROW_HEIGHT, resizeStartHeight.current + delta)
+      setRowHeights(prev => ({ ...prev, [resizingRow]: newHeight }))
+    }
+  }, [resizingCol, resizingRow])
 
   useEffect(() => {
     document.addEventListener('mouseup', handleMouseUp)
-    return () => document.removeEventListener('mouseup', handleMouseUp)
-  }, [handleMouseUp])
+    document.addEventListener('mousemove', handleMouseMove)
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.removeEventListener('mousemove', handleMouseMove)
+    }
+  }, [handleMouseUp, handleMouseMove])
+
+  const isResizing = resizingCol !== null || resizingRow !== null
 
   return (
     <div className="grid-view-fullscreen">
       <div className="grid-instructions">
-        <span>Click to toggle · Drag to select multiple · <Eye size={12} style={{color:'#22c55a'}}/> = shown to AI</span>
+        <span>Click to toggle · Drag to select · Drag edges to resize · <Eye size={12} style={{color:'#22c55a'}}/> = shown to AI</span>
         <span className="sheet-indicator">Sheet: <strong>{sheetName}</strong></span>
       </div>
       <div className="grid-scroll-container">
-        <table className="structure-grid">
+        <table className={`structure-grid ${isResizing ? 'resizing' : ''}`}>
           <thead>
             <tr>
-              <th className="corner-cell"></th>
+              <th className="corner-cell" style={{ width: 50 }}></th>
               {Array.from({ length: maxCols }, (_, i) => {
                 const col = getColumnLetter(i)
                 const isHidden = visibility.hiddenColumns?.has(col)
                 const isWL = visibility.visibleColumns?.has(col)
+                const width = getColWidth(i)
                 return (
-                  <th key={i} className={`col-header clickable ${isHidden ? 'user-hidden' : ''} ${isWL ? 'user-visible' : ''}`}
+                  <th 
+                    key={i} 
+                    className={`col-header clickable ${isHidden ? 'user-hidden' : ''} ${isWL ? 'user-visible' : ''}`}
+                    style={{ width, minWidth: width, maxWidth: width }}
                     onClick={() => onToggleColumn(col)}
-                    title={`Column ${col}: Click to toggle`}>
+                    title={`Column ${col}: Click to toggle`}
+                  >
                     <span className="col-letter">{col}</span>
                     {isWL && <Eye size={10} className="visible-indicator" />}
                     {isHidden && <EyeOff size={10} className="hidden-indicator" />}
+                    <div 
+                      className={`col-resize-handle ${resizingCol === i ? 'resizing' : ''}`}
+                      onMouseDown={(e) => handleColResizeStart(e, i)}
+                    />
                   </th>
                 )
               })}
@@ -451,15 +510,23 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
               const rowNum = rowIdx + 1
               const isRowHidden = visibility.hiddenRows?.has(rowNum)
               const isRowWL = visibility.visibleRows?.has(rowNum)
+              const height = getRowHeight(rowIdx)
               
               return (
                 <tr key={rowIdx} className={`${isRowHidden ? 'row-hidden' : ''} ${isRowWL ? 'row-visible' : ''}`}>
-                  <td className={`row-header clickable ${isRowHidden ? 'user-hidden' : ''} ${isRowWL ? 'user-visible' : ''}`}
+                  <td 
+                    className={`row-header clickable ${isRowHidden ? 'user-hidden' : ''} ${isRowWL ? 'user-visible' : ''}`}
+                    style={{ height, minHeight: height }}
                     onClick={() => onToggleRow(rowNum)}
-                    title={`Row ${rowNum}: Click to toggle`}>
+                    title={`Row ${rowNum}: Click to toggle`}
+                  >
                     <span className="row-number">{rowNum}</span>
                     {isRowWL && <Eye size={10} className="visible-indicator" />}
                     {isRowHidden && <EyeOff size={10} className="hidden-indicator" />}
+                    <div 
+                      className={`row-resize-handle ${resizingRow === rowIdx ? 'resizing' : ''}`}
+                      onMouseDown={(e) => handleRowResizeStart(e, rowIdx)}
+                    />
                   </td>
                   {Array.from({ length: maxCols }, (_, colIdx) => {
                     const col = getColumnLetter(colIdx)
@@ -468,18 +535,21 @@ function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, o
                     const isHidden = isUserHidden(addr, col, rowNum, visibility)
                     const isWL = isWhitelisted(addr, col, rowNum, visibility)
                     const inSel = isInSelection(colIdx, rowIdx)
+                    const width = getColWidth(colIdx)
                     
-                    // Format numeric value for display
                     const displayValue = numericValue !== undefined 
                       ? numericValue.toLocaleString('en-US', { maximumFractionDigits: 2 })
                       : null
                     
                     return (
-                      <td key={colIdx} 
+                      <td 
+                        key={colIdx} 
                         className={`grid-cell ${type} ${isHidden ? 'user-hidden' : ''} ${isWL ? 'user-visible' : ''} ${inSel ? 'in-selection' : ''}`}
-                        onMouseDown={(e) => handleMouseDown(e, colIdx, rowIdx)}
-                        onMouseEnter={() => handleMouseEnter(colIdx, rowIdx)}
-                        title={`${addr}: Click to toggle${isWL && displayValue ? ` (${displayValue})` : ''}`}>
+                        style={{ width, minWidth: width, maxWidth: width, height }}
+                        onMouseDown={(e) => handleCellMouseDown(e, colIdx, rowIdx)}
+                        onMouseEnter={() => handleCellMouseEnter(colIdx, rowIdx)}
+                        title={`${addr}: Click to toggle${isWL && displayValue ? ` (${displayValue})` : ''}`}
+                      >
                         <div className="cell-content">
                           {isHidden ? (
                             <EyeOff size={10} className="hidden-icon user-hidden-icon" />

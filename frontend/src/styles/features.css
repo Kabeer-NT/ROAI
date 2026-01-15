@@ -813,15 +813,13 @@
 .grid-scroll-container {
   flex: 1;
   overflow: auto;
-  padding: 0;
+  position: relative;
 }
 
 .structure-grid {
-  width: 100%;
-  height: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  table-layout: fixed;
+  min-width: 100%;
 }
 
 .structure-grid th,
@@ -832,6 +830,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  position: relative;
 }
 
 .structure-grid .corner-cell {
@@ -851,6 +850,8 @@
   z-index: 2;
   font-weight: 600;
   color: var(--text-secondary);
+  min-width: 100px;
+  user-select: none;
 }
 
 .structure-grid .col-header.clickable {
@@ -872,6 +873,24 @@
   color: #22c55a;
 }
 
+/* Column resize handle */
+.col-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+  z-index: 10;
+}
+
+.col-resize-handle:hover,
+.col-resize-handle.resizing {
+  background: var(--accent);
+}
+
 .structure-grid .row-header {
   background: var(--bg-elevated);
   position: sticky;
@@ -881,6 +900,7 @@
   color: var(--text-secondary);
   width: 50px;
   min-width: 50px;
+  user-select: none;
 }
 
 .structure-grid .row-header.clickable {
@@ -902,6 +922,23 @@
   color: #22c55a;
 }
 
+/* Row resize handle */
+.row-resize-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5px;
+  cursor: row-resize;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.row-resize-handle:hover,
+.row-resize-handle.resizing {
+  background: var(--accent);
+}
+
 .visible-indicator {
   color: #22c55a;
   margin-left: 4px;
@@ -916,7 +953,7 @@
   cursor: pointer;
   transition: background var(--transition-fast);
   background: var(--bg-base);
-  max-width: 200px;
+  min-width: 80px;
 }
 
 .grid-cell:hover {
@@ -1002,6 +1039,16 @@
   font-size: 12px;
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+/* Resizing state - prevent text selection */
+.structure-grid.resizing {
+  user-select: none;
+  cursor: col-resize;
+}
+
+.structure-grid.resizing-row {
+  cursor: row-resize;
 }
 
 /* ============================================================================
