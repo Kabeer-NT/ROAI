@@ -6,13 +6,26 @@ interface ChatInputProps {
   onFilesAdd: (files: FileList) => void
   onFilePickerOpen?: () => Promise<boolean>
   disabled: boolean
-  placeholder: string
+  placeholder?: string
+  hasFiles?: boolean
 }
 
-export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, placeholder }: ChatInputProps) {
+export function ChatInput({ 
+  onSend, 
+  onFilesAdd, 
+  onFilePickerOpen, 
+  disabled, 
+  placeholder,
+  hasFiles = false 
+}: ChatInputProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Better default placeholder based on state
+  const defaultPlaceholder = hasFiles 
+    ? 'Ask a question about your data...'
+    : 'Type a message...'
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -36,12 +49,10 @@ export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, plac
   }
 
   const handleAttachClick = async () => {
-    // Prefer File System Access API if available (enables auto-reload)
     if (onFilePickerOpen) {
       const handled = await onFilePickerOpen()
       if (handled) return
     }
-    // Fallback to regular file input
     fileInputRef.current?.click()
   }
 
@@ -53,12 +64,12 @@ export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, plac
   }
 
   return (
-    <div className="input-container">
+    <div className="input-wrapper">
       <div className="input-box">
         <button
           className="attach-btn"
           onClick={handleAttachClick}
-          title="Upload spreadsheet (with auto-reload)"
+          title="Upload spreadsheet"
         >
           <input
             ref={fileInputRef}
@@ -75,7 +86,7 @@ export function ChatInput({ onSend, onFilesAdd, onFilePickerOpen, disabled, plac
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={placeholder || defaultPlaceholder}
           rows={1}
           disabled={disabled}
         />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Message, SpreadsheetFile, ToolCall } from '../types'
 import { useAuth } from './useAuth'
+import type { Followup } from '../components/FollowUpChips'
 
 export { useAuth, AuthProvider } from './useAuth'
 export { useFileHandle } from './useFileHandle'
@@ -39,6 +40,16 @@ export function useModels() {
   return { models, selectedModel, setSelectedModel }
 }
 
+// ============================================================================
+// Upload Response
+// ============================================================================
+
+interface UploadResponse {
+  file_id: string
+  filename: string
+  sheets: Array<{ name: string; rows: number; columns: number }>
+}
+
 export function useSpreadsheets() {
   const { token } = useAuth()
   const [files, setFiles] = useState<SpreadsheetFile[]>([])
@@ -59,7 +70,7 @@ export function useSpreadsheets() {
       })
       if (!res.ok) throw new Error('Upload failed')
       
-      const data = await res.json()
+      const data: UploadResponse = await res.json()
       const newFile: SpreadsheetFile = {
         id: data.file_id || Date.now().toString(),
         filename: data.filename,
@@ -67,6 +78,7 @@ export function useSpreadsheets() {
         uploadedAt: new Date(),
       }
       setFiles(prev => [...prev, newFile])
+      
       return newFile
     } catch {
       return null
@@ -94,7 +106,7 @@ export function useSpreadsheets() {
       })
       if (!res.ok) throw new Error('Upload failed')
       
-      const data = await res.json()
+      const data: UploadResponse = await res.json()
       const updatedFile: SpreadsheetFile = {
         id: data.file_id || id,
         filename: data.filename,
@@ -103,6 +115,7 @@ export function useSpreadsheets() {
       }
       
       setFiles(prev => prev.map(f => f.id === id ? updatedFile : f))
+      
       return updatedFile
     } catch {
       return null
@@ -127,26 +140,28 @@ export function useSpreadsheets() {
     setFiles([])
   }, [token])
 
-  return { files, setFiles, isUploading, uploadFile, reuploadFile, removeFile, clearAll }
+  return { 
+    files, 
+    setFiles, 
+    isUploading, 
+    uploadFile, 
+    reuploadFile, 
+    removeFile, 
+    clearAll,
+  }
 }
 
 // ============================================================================
-// Visibility type for API calls - NOW SHEET-SCOPED
+// Visibility type for API calls - SHEET-SCOPED
 // ============================================================================
 
-/**
- * NEW format - sheet-scoped visibility:
- * {
- *   "filename.xlsx": {
- *     "Sheet1": { hiddenColumns: [...], hiddenRows: [...], hiddenCells: [...] },
- *     "Sheet2": { ... }
- *   }
- * }
- */
 interface SerializedSheetVisibility {
   hiddenColumns: string[]
   hiddenRows: number[]
   hiddenCells: string[]
+  visibleColumns?: string[]
+  visibleRows?: number[]
+  visibleCells?: string[]
 }
 
 interface SerializedFileVisibility {
@@ -155,6 +170,22 @@ interface SerializedFileVisibility {
 
 interface UseChatOptions {
   getAllSerializedVisibility?: () => Record<string, SerializedFileVisibility>
+}
+
+// ============================================================================
+// Chat Response
+// ============================================================================
+
+interface ChatResponse {
+  response: string
+  tool_calls?: ToolCall[]
+  followups?: Followup[] | string[]
+  error?: {
+    type: string
+    icon: string
+    message: string
+    suggestions: string[]
+  }
 }
 
 export function useChat(
@@ -184,24 +215,6 @@ export function useChat(
       const visibility = options?.getAllSerializedVisibility?.()
       const hasVisibility = visibility && Object.keys(visibility).length > 0
 
-      // DEBUG: Log what we're sending to the backend
-      console.group('🔒 Visibility Debug (Sheet-Scoped)')
-      console.log('getAllSerializedVisibility function exists:', !!options?.getAllSerializedVisibility)
-      console.log('Raw visibility data:', visibility)
-      console.log('Has visibility items:', hasVisibility)
-      if (hasVisibility) {
-        Object.entries(visibility).forEach(([filename, fileVis]) => {
-          console.log(`📁 File: ${filename}`)
-          Object.entries(fileVis).forEach(([sheetName, sheetVis]) => {
-            console.log(`  📋 Sheet: ${sheetName}`)
-            console.log(`    Hidden columns: ${sheetVis.hiddenColumns.join(', ') || 'none'}`)
-            console.log(`    Hidden rows: ${sheetVis.hiddenRows.join(', ') || 'none'}`)
-            console.log(`    Hidden cells: ${sheetVis.hiddenCells.join(', ') || 'none'}`)
-          })
-        })
-      }
-      console.groupEnd()
-
       const requestBody = {
         messages: [...messages, userMessage]
           .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
@@ -209,9 +222,6 @@ export function useChat(
         model: selectedModel,
         ...(hasVisibility && { visibility }),
       }
-
-      // DEBUG: Log the full request body
-      console.log('📤 Full request body being sent:', JSON.stringify(requestBody, null, 2))
 
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -222,13 +232,30 @@ export function useChat(
         body: JSON.stringify(requestBody),
       })
 
-      const data = await res.json()
+      const data: ChatResponse = await res.json()
       
       if (!res.ok) {
-        throw new Error(data.detail || 'Request failed')
+        // Check for friendly error
+        if (data.error && data.error.type === 'friendly_error') {
+          const errorContent = `${data.error.icon} **${data.error.message}**\n\n${data.error.suggestions.map(s => `• ${s}`).join('\n')}`
+          const errorMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: errorContent,
+            timestamp: new Date(),
+          }
+          setMessages(prev => [...prev, errorMessage])
+          return
+        }
+        throw new Error((data as any).detail || 'Request failed')
       }
       
       const toolCalls: ToolCall[] = data.tool_calls || []
+      
+      // Normalize followups to Followup[] format
+      const followups: Followup[] | undefined = data.followups?.map(f => 
+        typeof f === 'string' ? { text: f, type: 'followup' as const } : f
+      )
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -236,6 +263,7 @@ export function useChat(
         content: data.response,
         timestamp: new Date(),
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+        followups: followups && followups.length > 0 ? followups : undefined,
       }
       setMessages(prev => [...prev, assistantMessage])
     } catch (error) {
