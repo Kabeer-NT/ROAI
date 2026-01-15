@@ -57,25 +57,29 @@ async def list_conversations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    conversations = db.query(Conversation).filter(
-        Conversation.user_id == current_user.id
-    ).order_by(Conversation.updated_at.desc()).all()
+    # Single query with message count (fixes N+1 problem)
+    results = (
+        db.query(
+            Conversation,
+            func.count(Message.id).label('message_count')
+        )
+        .outerjoin(Message, Message.conversation_id == Conversation.id)
+        .filter(Conversation.user_id == current_user.id)
+        .group_by(Conversation.id)
+        .order_by(Conversation.updated_at.desc())
+        .all()
+    )
     
-    result = []
-    for conv in conversations:
-        msg_count = db.query(func.count(Message.id)).filter(
-            Message.conversation_id == conv.id
-        ).scalar()
-        
-        result.append(ConversationResponse(
+    return [
+        ConversationResponse(
             id=conv.id,
             title=conv.title,
             created_at=conv.created_at,
             updated_at=conv.updated_at,
             message_count=msg_count
-        ))
-    
-    return result
+        )
+        for conv, msg_count in results
+    ]
 
 
 @router.post("", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)

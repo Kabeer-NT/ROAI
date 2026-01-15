@@ -11,6 +11,8 @@ And BOTH visibility structures:
 
 CRITICAL: Visibility is ENFORCED during execution, not just in context building.
 Hidden rows/columns/cells will be SKIPPED.
+
+ENHANCED: Now includes instant insights, quick actions, and friendly errors.
 """
 
 import pandas as pd
@@ -21,6 +23,7 @@ import json
 from typing import Optional, Any
 from dataclasses import dataclass
 from io import BytesIO
+from datetime import datetime
 
 
 @dataclass
@@ -827,3 +830,115 @@ def list_available_files() -> list[dict]:
             "sheets": sheets_info
         })
     return result
+
+
+
+# =============================================================================
+# NEW: FRIENDLY ERROR RESPONSES
+# =============================================================================
+
+def friendly_error_response(error: Exception, context: dict = None) -> dict:
+    """Convert technical errors into friendly, actionable messages."""
+    context = context or {}
+    error_str = str(error)
+    error_type = type(error).__name__
+    
+    available_columns = context.get("available_columns", [])
+    available_sheets = context.get("available_sheets", [])
+    
+    if "KeyError" in error_type or "not found" in error_str.lower() or "does not exist" in error_str.lower():
+        if available_columns:
+            col_list = ", ".join(available_columns[:8])
+            if len(available_columns) > 8:
+                col_list += f" (and {len(available_columns) - 8} more)"
+            
+            return {
+                "type": "friendly_error",
+                "icon": "🤔",
+                "message": f"I couldn't find that column. Here's what I can see: {col_list}",
+                "suggestions": [
+                    f"What's the total {available_columns[0]}?" if available_columns else None,
+                    "Show me all the column names",
+                    "Give me a summary of the data"
+                ]
+            }
+        return {
+            "type": "friendly_error",
+            "icon": "🤔",
+            "message": "I couldn't find that column or field. Try asking me what columns are available.",
+            "suggestions": ["What columns are in this spreadsheet?", "Show me the structure of this data"]
+        }
+    
+    if "sheet" in error_str.lower() and ("not found" in error_str.lower() or "does not exist" in error_str.lower()):
+        if available_sheets:
+            return {
+                "type": "friendly_error",
+                "icon": "📑",
+                "message": f"That sheet doesn't exist. Available sheets: {', '.join(available_sheets)}",
+                "suggestions": [f"Show me data from {available_sheets[0]}" if available_sheets else None]
+            }
+    
+    if "timeout" in error_str.lower() or "timed out" in error_str.lower():
+        return {
+            "type": "friendly_error",
+            "icon": "⏱️",
+            "message": "That calculation is taking too long. Try narrowing down your question.",
+            "suggestions": ["Show me just the last 3 months", "What are the top 10 items?", "Give me a summary instead"]
+        }
+    
+    if "rate limit" in error_str.lower() or "429" in error_str:
+        return {
+            "type": "friendly_error",
+            "icon": "⏳",
+            "message": "I'm getting too many requests right now. Please wait a moment and try again.",
+            "suggestions": []
+        }
+    
+    if "division" in error_str.lower() or "ZeroDivision" in error_type:
+        return {
+            "type": "friendly_error",
+            "icon": "🔢",
+            "message": "I ran into a math error (probably division by zero). The data might have some zeros where there shouldn't be.",
+            "suggestions": ["Show me rows where values are zero", "Give me the raw totals instead"]
+        }
+    
+    if "empty" in error_str.lower() or "no data" in error_str.lower():
+        return {
+            "type": "friendly_error",
+            "icon": "📭",
+            "message": "I didn't find any data matching that criteria. Try broadening your search.",
+            "suggestions": ["Show me all the data", "What date range is in the file?"]
+        }
+    
+    if "file not found" in error_str.lower() or "not loaded" in error_str.lower():
+        return {
+            "type": "friendly_error",
+            "icon": "📁",
+            "message": "I don't have a spreadsheet loaded. Please upload a file first.",
+            "suggestions": []
+        }
+    
+    return {
+        "type": "friendly_error",
+        "icon": "😅",
+        "message": "Something went wrong with that request. Try rephrasing your question.",
+        "suggestions": ["Give me a summary of this data", "What can you tell me about this spreadsheet?", "Show me the totals"]
+    }
+
+
+def extract_context_for_errors(file_id: str) -> dict:
+    """Extract useful context from loaded spreadsheet for better error messages."""
+    context = {"available_columns": [], "available_sheets": []}
+    
+    if file_id not in spreadsheet_context.get("files", {}):
+        return context
+    
+    file_data = spreadsheet_context["files"][file_id]
+    
+    for sheet_name, df in file_data.get("sheets", {}).items():
+        context["available_sheets"].append(sheet_name)
+        context["available_columns"].extend([str(c) for c in df.columns.tolist()])
+    
+    context["available_columns"] = list(dict.fromkeys(context["available_columns"]))
+    
+    return context

@@ -1,5 +1,9 @@
 """
-Chat Routes (Protected) - WITH VISIBILITY SUPPORT
+Chat Routes (Protected) - WITH VISIBILITY SUPPORT AND FOLLOW-UPS
+================================================================
+Now includes:
+- Follow-up suggestions after every response
+- Better error handling with friendly messages
 """
 
 from fastapi import APIRouter, Depends
@@ -10,19 +14,22 @@ from sqlalchemy.orm import Session
 from app.services.db import get_db
 from app.services.auth import get_current_user
 from app.services import claude
+from app.services.spreadsheet import build_llm_context, spreadsheet_context, list_available_files, extract_context_for_errors, friendly_error_response
+from app.services.suggestions import generate_followups
+from app.services.prompts import get_friendly_error
 from app.models import User, Conversation, Message
 
 router = APIRouter(tags=["chat"])
 
 
+# =============================================================================
+# REQUEST/RESPONSE MODELS
+# =============================================================================
+
 class ChatMessage(BaseModel):
     role: str
     content: str
 
-
-# ============================================================================
-# Visibility Types - Sheet-Scoped
-# ============================================================================
 
 class SheetVisibility(BaseModel):
     """Visibility settings for a single sheet."""
@@ -31,18 +38,12 @@ class SheetVisibility(BaseModel):
     hiddenCells: list[str] = []
 
 
-# FileVisibility is a dict of sheet_name -> SheetVisibility
-# We use dict[str, SheetVisibility] but Pydantic needs special handling
-# So we'll accept dict[str, dict] and validate manually
-
-
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     model: Optional[str] = None
     conversation_id: Optional[int] = None
-    # NEW: Visibility settings (sheet-scoped)
-    # Format: { "filename.xlsx": { "Sheet1": { hiddenColumns: [...], ... }, "Sheet2": {...} } }
     visibility: Optional[dict[str, dict[str, dict]]] = None
+    include_followups: bool = True  # NEW: Enable/disable follow-up suggestions
 
 
 class ToolCall(BaseModel):
@@ -54,12 +55,23 @@ class ToolCall(BaseModel):
     result: Any
 
 
+class FollowupSuggestion(BaseModel):
+    text: str
+    type: str = "followup"
+
+
 class ChatResponse(BaseModel):
     response: str
     model: str
     conversation_id: Optional[int] = None
     tool_calls: list[ToolCall] = []
+    followups: list[FollowupSuggestion] = []  # NEW!
+    error: Optional[dict] = None  # NEW: Structured error info
 
+
+# =============================================================================
+# MAIN CHAT ENDPOINT
+# =============================================================================
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(
@@ -68,41 +80,153 @@ async def chat_endpoint(
     db: Session = Depends(get_db)
 ):
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
+    user_question = request.messages[-1].content if request.messages else ""
     
-    # FIX: Pass visibility to claude.chat()
-    result = await claude.chat(
-        messages, 
-        request.model,
-        visibility=request.visibility  # NEW: Pass visibility settings
-    )
-    
-    conversation_id = request.conversation_id
-    
-    if conversation_id:
-        conv = db.query(Conversation).filter(
-            Conversation.id == conversation_id,
-            Conversation.user_id == current_user.id
-        ).first()
+    try:
+        # Call Claude with visibility settings
+        result = await claude.chat(
+            messages, 
+            request.model,
+            visibility=request.visibility
+        )
         
-        if conv:
-            user_msg = Message(
-                conversation_id=conv.id,
-                role="user",
-                content=request.messages[-1].content
-            )
-            db.add(user_msg)
+        response_text = result.get("response", "")
+        
+        # Check for errors from Claude
+        if result.get("error"):
+            error_type = result.get("error", "unknown")
+            friendly = get_friendly_error(error_type)
             
-            assistant_msg = Message(
-                conversation_id=conv.id,
-                role="assistant",
-                content=result["response"]
+            return ChatResponse(
+                response=friendly["message"],
+                model=result.get("model", "unknown"),
+                conversation_id=request.conversation_id,
+                tool_calls=[],
+                followups=[FollowupSuggestion(text=s) for s in friendly.get("suggestions", [])],
+                error=friendly
             )
-            db.add(assistant_msg)
-            db.commit()
+        
+        # Generate follow-up suggestions
+        followups = []
+        if request.include_followups and response_text:
+            try:
+                ss_context = build_llm_context(visibility=request.visibility)
+                followup_result = await generate_followups(
+                    user_question,
+                    response_text,
+                    ss_context
+                )
+                
+                followups = [
+                    FollowupSuggestion(text=f)
+                    for f in followup_result.get("followups", [])
+                ]
+            except Exception as e:
+                print(f"Followup generation failed: {e}")
+                # Don't fail the whole request, just skip followups
+        
+        # Save to conversation if provided
+        conversation_id = request.conversation_id
+        if conversation_id:
+            conv = db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+            
+            if conv:
+                user_msg = Message(
+                    conversation_id=conv.id,
+                    role="user",
+                    content=user_question
+                )
+                db.add(user_msg)
+                
+                assistant_msg = Message(
+                    conversation_id=conv.id,
+                    role="assistant",
+                    content=response_text
+                )
+                db.add(assistant_msg)
+                db.commit()
+        
+        return ChatResponse(
+            response=response_text,
+            model=result.get("model", "unknown"),
+            conversation_id=conversation_id,
+            tool_calls=result.get("tool_calls", []),
+            followups=followups
+        )
     
-    return ChatResponse(
-        response=result["response"],
-        model=result["model"],
-        conversation_id=conversation_id,
-        tool_calls=result.get("tool_calls", [])
-    )
+    except Exception as e:
+        print(f"Chat error: {e}")
+        
+        # Return friendly error
+        files = list_available_files()
+        file_id = files[0]["file_id"] if files else None
+        
+        context = {}
+        if file_id:
+            context = extract_context_for_errors(file_id)
+        
+        friendly = friendly_error_response(e, context)
+        
+        return ChatResponse(
+            response=friendly["message"],
+            model="error",
+            conversation_id=request.conversation_id,
+            tool_calls=[],
+            followups=[FollowupSuggestion(text=s) for s in friendly.get("suggestions", []) if s],
+            error=friendly
+        )
+
+
+# =============================================================================
+# QUICK CHAT - Simpler endpoint for one-off questions
+# =============================================================================
+
+class QuickChatRequest(BaseModel):
+    question: str
+    file_id: Optional[str] = None
+
+
+class QuickChatResponse(BaseModel):
+    answer: str
+    followups: list[str] = []
+
+
+@router.post("/chat/quick", response_model=QuickChatResponse)
+async def quick_chat(
+    request: QuickChatRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Simpler chat endpoint for quick questions.
+    Doesn't save to conversation history.
+    """
+    try:
+        result = await claude.chat(
+            messages=[{"role": "user", "content": request.question}],
+            model=None,
+            visibility=None
+        )
+        
+        answer = result.get("response", "")
+        
+        # Generate followups
+        followups = []
+        try:
+            followup_result = await generate_followups(request.question, answer, "")
+            followups = followup_result.get("followups", [])
+        except:
+            pass
+        
+        return QuickChatResponse(
+            answer=answer,
+            followups=followups
+        )
+    
+    except Exception as e:
+        return QuickChatResponse(
+            answer="Sorry, something went wrong. Try asking a different way.",
+            followups=["What are the totals?", "Show me a summary"]
+        )

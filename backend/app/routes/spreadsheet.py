@@ -13,7 +13,6 @@ import pandas as pd
 import io
 import uuid
 import json
-import re
 
 from app.services.db import get_db
 from app.services.auth import get_current_user
@@ -23,14 +22,18 @@ from app.services.spreadsheet import (
     remove_file_from_context,
     execute_formula,
     execute_python_query,
-    get_file_id_by_name,
     list_available_files,
-    build_llm_context,
+    friendly_error_response,
+    extract_context_for_errors,
 )
 from app.models import User, Spreadsheet
 
 router = APIRouter(tags=["spreadsheet"])
 
+
+# =============================================================================
+# RESPONSE MODELS
+# =============================================================================
 
 class UploadResponse(BaseModel):
     success: bool
@@ -50,6 +53,17 @@ class PythonQueryRequest(BaseModel):
     file_id: Optional[str] = None
 
 
+class FriendlyError(BaseModel):
+    type: str = "friendly_error"
+    icon: str
+    message: str
+    suggestions: list[str]
+
+
+# =============================================================================
+# UPLOAD
+# =============================================================================
+
 @router.post("/upload", response_model=UploadResponse)
 async def upload_spreadsheet(
     file: UploadFile = File(...),
@@ -63,11 +77,16 @@ async def upload_spreadsheet(
     filename = file.filename or "uploaded_file"
     
     if not any(filename.endswith(ext) for ext in [".xlsx", ".xls", ".csv", ".tsv"]):
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+        raise HTTPException(status_code=400, detail="Unsupported file type. Please upload .xlsx, .xls, .csv, or .tsv")
     
     try:
         # Read raw bytes
         contents = await file.read()
+        
+        # Check file size (50MB limit)
+        if len(contents) > 50 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+        
         file_buffer = io.BytesIO(contents)
         
         # Parse into DataFrames
@@ -110,12 +129,18 @@ async def upload_spreadsheet(
             success=True,
             file_id=file_id,
             filename=filename,
-            sheets=sheet_summaries
+            sheets=sheet_summaries,
         )
     
+    except pd.errors.EmptyDataError:
+        raise HTTPException(status_code=400, detail="The file appears to be empty.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error parsing file: {str(e)}")
 
+
+# =============================================================================
+# FORMULA EXECUTION
+# =============================================================================
 
 @router.post("/execute/formula")
 async def execute_formula_endpoint(
@@ -134,11 +159,18 @@ async def execute_formula_endpoint(
         files = list_available_files()
         if len(files) == 1:
             file_id = files[0]["file_id"]
+        elif len(files) == 0:
+            return FriendlyError(
+                icon="📁",
+                message="No spreadsheet loaded. Please upload a file first.",
+                suggestions=[]
+            ).model_dump()
         else:
-            raise HTTPException(
-                status_code=400, 
-                detail="Multiple files loaded. Please specify file_id."
-            )
+            return FriendlyError(
+                icon="📑",
+                message=f"You have {len(files)} files loaded. Which one should I use?",
+                suggestions=[f"Use {f['filename']}" for f in files[:3]]
+            ).model_dump()
     
     # Verify ownership
     ss = db.query(Spreadsheet).filter(
@@ -157,22 +189,34 @@ async def execute_formula_endpoint(
             if len(sheets) == 1:
                 sheet_name = list(sheets.keys())[0]
             else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Multiple sheets available: {list(sheets.keys())}. Please specify sheet_name."
-                )
+                return FriendlyError(
+                    icon="📑",
+                    message=f"This file has multiple sheets. Which one?",
+                    suggestions=[f"Use sheet '{s}'" for s in list(sheets.keys())[:4]]
+                ).model_dump()
     
-    result = execute_formula(request.formula, file_id, sheet_name)
+    try:
+        result = execute_formula(request.formula, file_id, sheet_name)
+        
+        if isinstance(result, dict) and "error" in result:
+            context = extract_context_for_errors(file_id)
+            friendly = friendly_error_response(Exception(result["error"]), context)
+            return friendly
+        
+        return {
+            "formula": request.formula,
+            "result": result,
+            "sheet": sheet_name
+        }
     
-    if isinstance(result, dict) and "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return {
-        "formula": request.formula,
-        "result": result,
-        "sheet": sheet_name
-    }
+    except Exception as e:
+        context = extract_context_for_errors(file_id)
+        return friendly_error_response(e, context)
 
+
+# =============================================================================
+# PYTHON EXECUTION
+# =============================================================================
 
 @router.post("/execute/python")
 async def execute_python_endpoint(
@@ -190,11 +234,18 @@ async def execute_python_endpoint(
         files = list_available_files()
         if len(files) == 1:
             file_id = files[0]["file_id"]
+        elif len(files) == 0:
+            return FriendlyError(
+                icon="📁",
+                message="No spreadsheet loaded. Please upload a file first.",
+                suggestions=[]
+            ).model_dump()
         else:
-            raise HTTPException(
-                status_code=400,
-                detail="Multiple files loaded. Please specify file_id."
-            )
+            return FriendlyError(
+                icon="📑",
+                message=f"You have {len(files)} files loaded. Which one?",
+                suggestions=[f"Use {f['filename']}" for f in files[:3]]
+            ).model_dump()
     
     # Verify ownership
     ss = db.query(Spreadsheet).filter(
@@ -205,16 +256,27 @@ async def execute_python_endpoint(
     if not ss:
         raise HTTPException(status_code=404, detail="Spreadsheet not found")
     
-    result = execute_python_query(request.code, file_id)
+    try:
+        result = execute_python_query(request.code, file_id)
+        
+        if isinstance(result, dict) and "error" in result:
+            context = extract_context_for_errors(file_id)
+            friendly = friendly_error_response(Exception(result["error"]), context)
+            return friendly
+        
+        return {
+            "code": request.code,
+            "result": result
+        }
     
-    if isinstance(result, dict) and "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-    
-    return {
-        "code": request.code,
-        "result": result
-    }
+    except Exception as e:
+        context = extract_context_for_errors(file_id)
+        return friendly_error_response(e, context)
 
+
+# =============================================================================
+# STRUCTURE ENDPOINT
+# =============================================================================
 
 @router.get("/spreadsheet/{file_id}/structure")
 async def get_spreadsheet_structure(
@@ -276,26 +338,23 @@ async def get_spreadsheet_structure(
             if hasattr(s, 'text_values') and s.text_values:
                 sheet_data["text_values"] = s.text_values
             
-            # NEW: Include numeric values for UI preview (whitelisting feature)
-            # Pull from actual DataFrame data
+            # Include numeric values for UI preview
             if file_id in spreadsheet_context["files"]:
                 file_data = spreadsheet_context["files"][file_id]
                 if name in file_data["sheets"]:
                     df = file_data["sheets"][name]
                     numeric_values = {}
-                    max_rows = min(len(df), 100)  # Limit to 100 rows
-                    max_cols = min(len(df.columns), 26)  # Limit to 26 columns (A-Z)
+                    max_rows = min(len(df), 100)
+                    max_cols = min(len(df.columns), 26)
                     
                     for row_idx in range(max_rows):
                         for col_idx in range(max_cols):
                             col_letter = _get_column_letter(col_idx)
-                            cell_addr = f"{col_letter}{row_idx + 2}"  # +2 because row 1 is header
+                            cell_addr = f"{col_letter}{row_idx + 2}"
                             value = df.iloc[row_idx, col_idx]
                             
-                            # Only include numeric values
                             if pd.notna(value) and isinstance(value, (int, float)):
-                                # Convert numpy types to Python native
-                                if hasattr(value, 'item'):  # numpy scalar
+                                if hasattr(value, 'item'):
                                     numeric_values[cell_addr] = value.item()
                                 else:
                                     numeric_values[cell_addr] = float(value) if isinstance(value, float) else int(value)
@@ -315,7 +374,7 @@ async def get_spreadsheet_structure(
 def _get_column_letter(idx: int) -> str:
     """Convert 0-indexed column number to Excel-style letter (A, B, ..., Z, AA, etc.)"""
     result = ""
-    idx += 1  # Convert to 1-indexed
+    idx += 1
     while idx > 0:
         idx -= 1
         result = chr(65 + idx % 26) + result
@@ -329,6 +388,10 @@ def _count_types(cell_types: dict) -> dict:
         counts[t] = counts.get(t, 0) + 1
     return counts
 
+
+# =============================================================================
+# LIST / DELETE ENDPOINTS
+# =============================================================================
 
 @router.get("/spreadsheet")
 async def get_spreadsheet_info(
