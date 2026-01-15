@@ -4,6 +4,7 @@ import { Copy, Check, User, Hexagon } from 'lucide-react'
 import type { Message } from '../types'
 import { ThinkingBlock } from './ThinkingBlock'
 import { FollowupChips } from './FollowUpChips'
+import { SourcesList } from './SourcesList'
 
 interface ChatMessageProps {
   message: Message
@@ -35,6 +36,11 @@ export function ChatMessage({ message, onFollowupClick, isLatest = false, disabl
     message.followups && 
     message.followups.length > 0 &&
     onFollowupClick
+
+  const showSources = 
+    message.role === 'assistant' &&
+    message.sources &&
+    message.sources.length > 0
 
   return (
     <div className={`message ${message.role}`}>
@@ -81,6 +87,15 @@ export function ChatMessage({ message, onFollowupClick, isLatest = false, disabl
             {message.content}
           </ReactMarkdown>
         </div>
+
+        {/* Show web sources for messages with search results */}
+        {showSources && (
+          <SourcesList 
+            sources={message.sources!} 
+            className="message-sources"
+            maxVisible={3}
+          />
+        )}
 
         {/* Show followup chips for the latest assistant message */}
         {showFollowups && (

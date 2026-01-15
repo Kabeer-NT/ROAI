@@ -1606,3 +1606,341 @@
   background: #d97706;
   color: white;
 }
+/* =============================================================================
+   Sources List Component Styles
+   ============================================================================= */
+
+/* Main sources list container */
+.sources-list {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.03));
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+}
+
+[data-theme="dark"] .sources-list {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Header */
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #666);
+}
+
+.sources-icon {
+  color: var(--accent-color, #3b82f6);
+}
+
+.sources-title {
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sources-count {
+  background: var(--accent-color, #3b82f6);
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Source items container */
+.sources-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Individual source item */
+.source-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: var(--bg-primary, white);
+  border-radius: 6px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.15s ease;
+}
+
+.source-item:hover {
+  border-color: var(--accent-color, #3b82f6);
+  background: var(--bg-hover, rgba(59, 130, 246, 0.04));
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .source-item {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .source-item:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Favicon */
+.source-favicon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary, #f3f4f6);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.source-favicon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.source-favicon-fallback {
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.source-favicon-fallback.hidden {
+  display: none;
+}
+
+/* Source content */
+.source-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.source-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.source-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.source-external-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #9ca3af);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.source-item:hover .source-external-icon {
+  opacity: 1;
+}
+
+.source-domain {
+  font-size: 11px;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.source-snippet {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.4;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Toggle button */
+.sources-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--accent-color, #3b82f6);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sources-toggle:hover {
+  background: var(--bg-hover, rgba(59, 130, 246, 0.08));
+}
+
+
+/* =============================================================================
+   Source Badges (Compact inline display)
+   ============================================================================= */
+
+.source-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--text-secondary, #6b7280);
+  background: var(--bg-secondary, rgba(0, 0, 0, 0.04));
+  border-radius: 12px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.source-badge:hover {
+  background: var(--accent-color, #3b82f6);
+  color: white;
+}
+
+.source-badge.more {
+  color: var(--text-tertiary, #9ca3af);
+  cursor: default;
+}
+
+
+/* =============================================================================
+   Tool Call Sources (Within ThinkingBlock)
+   ============================================================================= */
+
+.tool-call-sources {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color, rgba(0, 0, 0, 0.1));
+}
+
+[data-theme="dark"] .tool-call-sources {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.tool-call-sources-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tool-call-sources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-call-source-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--accent-color, #3b82f6);
+  background: var(--bg-secondary, rgba(59, 130, 246, 0.08));
+  border-radius: 4px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.tool-call-source-item:hover {
+  background: var(--accent-color, #3b82f6);
+  color: white;
+}
+
+.tool-call-source-item .source-domain {
+  font-size: 10px;
+  color: inherit;
+}
+
+.tool-call-sources-more {
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--text-tertiary, #9ca3af);
+  background: transparent;
+  border: 1px dashed var(--border-color, rgba(0, 0, 0, 0.15));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tool-call-sources-more:hover {
+  border-color: var(--accent-color, #3b82f6);
+  color: var(--accent-color, #3b82f6);
+}
+
+
+/* =============================================================================
+   Thinking Block Source Badge
+   ============================================================================= */
+
+.thinking-sources-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
+  color: var(--accent-color, #3b82f6);
+  background: var(--bg-secondary, rgba(59, 130, 246, 0.1));
+  border-radius: 10px;
+}
+
+
+/* =============================================================================
+   Web Search Query Styling (in ThinkingBlock)
+   ============================================================================= */
+
+.web-search-query {
+  background: var(--bg-secondary, rgba(59, 130, 246, 0.05));
+  border-left: 2px solid var(--accent-color, #3b82f6);
+}
+
+.web-search-query code {
+  color: var(--accent-color, #3b82f6);
+}
+
+
+/* =============================================================================
+   Message Sources (within ChatMessage)
+   ============================================================================= */
+
+.message-sources {
+  margin-top: 16px;
+}
+
+
+/* =============================================================================
+   Dark Theme Overrides
+   ============================================================================= */
+
+[data-theme="dark"] {
+  --bg-secondary: rgba(255, 255, 255, 0.05);
+  --bg-hover: rgba(59, 130, 246, 0.15);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-tertiary: #6b7280;
+}
