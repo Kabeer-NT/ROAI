@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileSpreadsheet, Eye, EyeOff } from 'lucide-react'
+import { FileSpreadsheet, Eye, EyeOff, X, Table, ChevronRight } from 'lucide-react'
 import type { SpreadsheetFile } from '../types'
 import type { FileVisibilityState, SheetVisibilityState } from '../hooks/useVisibility'
 import { StructureViewer } from './StructureViewer'
@@ -7,10 +7,8 @@ import { StructureViewer } from './StructureViewer'
 interface FileCardProps {
   file: SpreadsheetFile
   onRemove: () => void
-  // NEW: Sheet-scoped visibility
   fileVisibility?: FileVisibilityState
   onFileVisibilityChange?: (visibility: FileVisibilityState) => void
-  // DEPRECATED: Legacy props for backward compatibility
   visibility?: SheetVisibilityState
   onVisibilityChange?: (visibility: SheetVisibilityState) => void
 }
@@ -39,20 +37,24 @@ export function FileCard({
   visibility: legacyVisibility, 
   onVisibilityChange: legacyOnVisibilityChange 
 }: FileCardProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
   const [showStructure, setShowStructure] = useState(false)
 
   const totalRows = file.sheets.reduce((sum, s) => sum + s.rows, 0)
+  const totalCols = Math.max(...file.sheets.map(s => s.columns))
   
-  // Count hidden items - prefer new system, fall back to legacy
   const hiddenCount = fileVisibility 
     ? countFileHidden(fileVisibility) 
     : countLegacyHidden(legacyVisibility)
 
   return (
     <>
-      <div className={`file-card ${hiddenCount > 0 ? 'has-hidden' : ''}`}>
-        <div className="file-card-header" onClick={() => setExpanded(!expanded)}>
+      {/* Compact File Card */}
+      <div 
+        className={`file-card ${hiddenCount > 0 ? 'has-hidden' : ''}`}
+        onClick={() => setShowDetails(true)}
+      >
+        <div className="file-card-header">
           <FileSpreadsheet className="file-icon" size={20} color="#22c55e" />
           <div className="file-info">
             <div className="file-name" title={file.filename}>
@@ -68,62 +70,89 @@ export function FileCard({
               )}
             </div>
           </div>
-          <button
-            className="file-remove"
-            onClick={e => {
-              e.stopPropagation()
-              onRemove()
-            }}
-          >
-            ×
-          </button>
+          <ChevronRight size={16} className="file-card-chevron" />
         </div>
+      </div>
 
-        {expanded && (
-          <div className="file-card-sheets">
-            {file.sheets.map(sheet => {
-              // Count hidden items per sheet if using new system
-              const sheetHidden = fileVisibility?.[sheet.name]
-                ? (fileVisibility[sheet.name].hiddenColumns.size +
-                   fileVisibility[sheet.name].hiddenRows.size +
-                   fileVisibility[sheet.name].hiddenCells.size)
-                : 0
-              
-              return (
-                <div key={sheet.name} className="sheet-item">
-                  <span className="sheet-name">{sheet.name}</span>
-                  <span className="sheet-meta">
-                    {sheet.rows}×{sheet.columns}
+      {/* File Details Popup */}
+      {showDetails && (
+        <div className="file-details-overlay" onClick={() => setShowDetails(false)}>
+          <div className="file-details-popup" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="file-details-header">
+              <div className="file-details-title">
+                <FileSpreadsheet size={20} color="#22c55e" />
+                <div>
+                  <div className="file-details-name">{file.filename}</div>
+                  <div className="file-details-meta">
+                    {file.sheets.length} sheet{file.sheets.length !== 1 ? 's' : ''} · {totalRows} rows · {totalCols} columns
+                  </div>
+                </div>
+              </div>
+              <button className="file-details-close" onClick={() => setShowDetails(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Sheets List */}
+            <div className="file-details-sheets">
+              <div className="file-details-section-label">Sheets</div>
+              {file.sheets.map(sheet => {
+                const sheetHidden = fileVisibility?.[sheet.name]
+                  ? (fileVisibility[sheet.name].hiddenColumns.size +
+                     fileVisibility[sheet.name].hiddenRows.size +
+                     fileVisibility[sheet.name].hiddenCells.size)
+                  : 0
+                
+                return (
+                  <div key={sheet.name} className="file-details-sheet-item">
+                    <Table size={14} className="sheet-icon" />
+                    <span className="sheet-name">{sheet.name}</span>
+                    <span className="sheet-dimensions">{sheet.rows} × {sheet.columns}</span>
                     {sheetHidden > 0 && (
-                      <span className="sheet-hidden-indicator" title={`${sheetHidden} items hidden`}>
+                      <span className="sheet-hidden-badge">
                         <EyeOff size={10} />
-                        {sheetHidden}
+                        {sheetHidden} hidden
                       </span>
                     )}
-                  </span>
-                </div>
-              )
-            })}
-            <button 
-              className="view-structure-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                setShowStructure(true)
-              }}
-            >
-              <Eye size={14} />
-              View Structure (what AI sees)
-            </button>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Actions */}
+            <div className="file-details-actions">
+              <button 
+                className="file-details-btn view-btn"
+                onClick={() => {
+                  setShowDetails(false)
+                  setShowStructure(true)
+                }}
+              >
+                <Eye size={16} />
+                View Structure
+              </button>
+              <button 
+                className="file-details-btn remove-btn"
+                onClick={() => {
+                  setShowDetails(false)
+                  onRemove()
+                }}
+              >
+                <X size={16} />
+                Remove File
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
       
+      {/* Structure Viewer Modal */}
       <StructureViewer
         fileId={file.id}
         filename={file.filename}
         isOpen={showStructure}
         onClose={() => setShowStructure(false)}
-        // Pass both new and legacy props - StructureViewer will use what's available
         fileVisibility={fileVisibility}
         onFileVisibilityChange={onFileVisibilityChange}
         visibility={legacyVisibility}
