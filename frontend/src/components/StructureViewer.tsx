@@ -323,8 +323,8 @@ interface GridViewProps {
 }
 
 function GridView({ sheet, sheetName, visibility, onToggleColumn, onToggleRow, onToggleCell, onToggleCells }: GridViewProps) {
-  const maxRows = Math.min(sheet.rows, 100)
-  const maxCols = Math.min(sheet.cols, 100)  // Support up to 100 columns (A-CV)
+  const maxRows = Math.min(sheet.rows, 500)   // Support up to 500 rows
+  const maxCols = Math.min(sheet.cols, 100)   // Support up to 100 columns (A-CV)
   
   // Selection state
   const [isDragging, setIsDragging] = useState(false)
