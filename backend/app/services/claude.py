@@ -231,8 +231,13 @@ async def _execute_action(action: dict, file_id: str) -> dict:
     
     elif action_type == "web_search":
         query = action.get("query", "")
-        result = await _do_web_search(query)
-        return {"type": "web_search", "query": query, "result": result}
+        search_result = await _do_web_search(query)
+        return {
+            "type": "web_search", 
+            "query": query, 
+            "result": search_result.get("text", ""),
+            "sources": search_result.get("sources", [])
+        }
     
     elif action_type == "multi":
         steps = action.get("steps", [])
@@ -255,9 +260,60 @@ async def _execute_action(action: dict, file_id: str) -> dict:
         return {"type": "error", "error": f"Unknown action: {action_type}"}
 
 
-async def _do_web_search(query: str) -> str:
-    """Execute web search using Claude's web_search tool with proper tool loop."""
+def _extract_sources_from_response(data: dict) -> list[dict]:
+    """
+    Extract source URLs and titles from web search response.
+    
+    The API returns sources in the content blocks, typically as:
+    - Citations within text blocks
+    - Dedicated source/citation blocks
+    
+    Returns list of {url, title, snippet} dicts.
+    """
+    sources = []
+    seen_urls = set()
+    
+    for block in data.get("content", []):
+        # Check for web_search_tool_result blocks
+        if block.get("type") == "web_search_tool_result":
+            for result in block.get("content", []):
+                if result.get("type") == "web_search_result":
+                    url = result.get("url", "")
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        sources.append({
+                            "url": url,
+                            "title": result.get("title", ""),
+                            "snippet": result.get("snippet", result.get("content", ""))[:200],
+                        })
+        
+        # Check for citations in text blocks
+        if block.get("type") == "text":
+            citations = block.get("citations", [])
+            for citation in citations:
+                url = citation.get("url", "")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    sources.append({
+                        "url": url,
+                        "title": citation.get("title", ""),
+                        "snippet": citation.get("cited_text", "")[:200],
+                    })
+    
+    return sources
+
+
+async def _do_web_search(query: str) -> dict:
+    """
+    Execute web search using Claude's web_search tool.
+    
+    Returns dict with:
+        - text: The summarized search results
+        - sources: List of {url, title, snippet} for citations
+    """
     print(f"   🔍 Web search: {query}")
+    
+    all_sources = []
     
     try:
         client = get_http_client()
@@ -285,10 +341,16 @@ async def _do_web_search(query: str) -> str:
         if response.status_code == 429:
             retry_after = response.headers.get("retry-after", "60")
             print(f"   ⚠️ Web search rate limited, retry after {retry_after}s")
-            return f"Rate limited - please wait {retry_after}s"
+            return {
+                "text": f"Rate limited - please wait {retry_after}s",
+                "sources": []
+            }
         
         response.raise_for_status()
         data = response.json()
+        
+        # Extract sources from initial response
+        all_sources.extend(_extract_sources_from_response(data))
         
         messages = [initial_message]
         
@@ -300,6 +362,11 @@ async def _do_web_search(query: str) -> str:
             if data.get("stop_reason") == "tool_use":
                 assistant_content = data.get("content", [])
                 messages.append({"role": "assistant", "content": assistant_content})
+                
+                # Extract sources from tool use response
+                for block in assistant_content:
+                    if block.get("type") == "web_search_tool_result":
+                        all_sources.extend(_extract_sources_from_response({"content": [block]}))
                 
                 tool_results = []
                 for block in assistant_content:
@@ -329,23 +396,42 @@ async def _do_web_search(query: str) -> str:
                 )
                 
                 if response.status_code == 429:
-                    return "Rate limited during search"
+                    return {
+                        "text": "Rate limited during search",
+                        "sources": all_sources
+                    }
                 
                 response.raise_for_status()
                 data = response.json()
+                
+                # Extract sources from follow-up response
+                all_sources.extend(_extract_sources_from_response(data))
             else:
                 break
         
-        result = _extract_text(data)
-        print(f"   ✓ Search complete: {result[:100]}...")
-        return result if result else "No results found"
+        result_text = _extract_text(data)
+        print(f"   ✓ Search complete: {result_text[:100]}...")
+        print(f"   📚 Found {len(all_sources)} sources")
+        
+        # Deduplicate sources by URL
+        unique_sources = []
+        seen = set()
+        for src in all_sources:
+            if src["url"] not in seen:
+                seen.add(src["url"])
+                unique_sources.append(src)
+        
+        return {
+            "text": result_text if result_text else "No results found",
+            "sources": unique_sources[:10]  # Limit to top 10 sources
+        }
         
     except httpx.TimeoutException:
         print(f"   ⚠️ Web search timed out")
-        return "Search timed out - try again"
+        return {"text": "Search timed out - try again", "sources": []}
     except Exception as e:
         print(f"   ⚠️ Web search error: {e}")
-        return f"Search failed: {str(e)}"
+        return {"text": f"Search failed: {str(e)}", "sources": []}
 
 
 # =============================================================================
@@ -444,6 +530,8 @@ async def chat(
         execution_result = await _execute_action(action_plan, file_id)
         
         # Format tool calls for frontend
+        web_sources = []  # Collect sources from web searches
+        
         if execution_result.get("type") == "multi":
             for label, result in execution_result.get("results", {}).items():
                 tool_calls_made.append({
@@ -452,12 +540,21 @@ async def chat(
                     "result": result
                 })
         else:
-            tool_calls_made.append({
+            tool_call = {
                 "type": execution_result.get("type", "unknown"),
                 "formula": execution_result.get("formula", ""),
                 "code": execution_result.get("code", ""),
+                "query": execution_result.get("query", ""),
                 "result": execution_result.get("result")
-            })
+            }
+            
+            # Include sources if this was a web search
+            if execution_result.get("type") == "web_search":
+                sources = execution_result.get("sources", [])
+                tool_call["sources"] = sources
+                web_sources.extend(sources)
+            
+            tool_calls_made.append(tool_call)
         
         print(f"   Result: {json.dumps(execution_result.get('result', execution_result), default=str)[:200]}")
         
@@ -489,7 +586,8 @@ Computed result: {json.dumps(result_summary, default=str)}"""
         return {
             "response": final_response,
             "model": CLAUDE_MODEL,
-            "tool_calls": tool_calls_made
+            "tool_calls": tool_calls_made,
+            "sources": web_sources  # Include web sources at top level for easy access
         }
         
     except RateLimitError:

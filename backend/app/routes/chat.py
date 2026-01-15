@@ -1,9 +1,10 @@
 """
-Chat Routes (Protected) - WITH VISIBILITY SUPPORT AND FOLLOW-UPS
-================================================================
-Now includes:
+Chat Routes (Protected) - WITH VISIBILITY SUPPORT, FOLLOW-UPS, AND WEB SOURCES
+===============================================================================
+Features:
 - Follow-up suggestions after every response
 - Better error handling with friendly messages
+- Web search source citations for transparency
 """
 
 from fastapi import APIRouter, Depends
@@ -13,9 +14,15 @@ from sqlalchemy.orm import Session
 
 from app.services.db import get_db
 from app.services.auth import get_current_user
-from app.services import claude
-from app.services.spreadsheet import build_llm_context, spreadsheet_context, list_available_files, extract_context_for_errors, friendly_error_response
-from app.services.suggestions import generate_followups
+from app.services import claude as claude 
+from app.services.spreadsheet import ( 
+    build_llm_context, 
+    spreadsheet_context, 
+    list_available_files, 
+    extract_context_for_errors, 
+    friendly_error_response
+)
+from app.services.suggestions import generate_followups  # Updated import
 from app.services.prompts import get_friendly_error
 from app.models import User, Conversation, Message
 
@@ -43,7 +50,14 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     conversation_id: Optional[int] = None
     visibility: Optional[dict[str, dict[str, dict]]] = None
-    include_followups: bool = True  # NEW: Enable/disable follow-up suggestions
+    include_followups: bool = True
+
+
+class WebSource(BaseModel):
+    """A web source citation from search results."""
+    url: str
+    title: str = ""
+    snippet: str = ""
 
 
 class ToolCall(BaseModel):
@@ -53,6 +67,7 @@ class ToolCall(BaseModel):
     query: Optional[str] = None
     sheet: Optional[str] = None
     result: Any
+    sources: list[WebSource] = []  # Sources for web_search type
 
 
 class FollowupSuggestion(BaseModel):
@@ -65,8 +80,9 @@ class ChatResponse(BaseModel):
     model: str
     conversation_id: Optional[int] = None
     tool_calls: list[ToolCall] = []
-    followups: list[FollowupSuggestion] = []  # NEW!
-    error: Optional[dict] = None  # NEW: Structured error info
+    followups: list[FollowupSuggestion] = []
+    sources: list[WebSource] = []  # Top-level sources for easy access
+    error: Optional[dict] = None
 
 
 # =============================================================================
@@ -103,8 +119,42 @@ async def chat_endpoint(
                 conversation_id=request.conversation_id,
                 tool_calls=[],
                 followups=[FollowupSuggestion(text=s) for s in friendly.get("suggestions", [])],
+                sources=[],
                 error=friendly
             )
+        
+        # Extract sources from result
+        raw_sources = result.get("sources", [])
+        sources = [
+            WebSource(
+                url=s.get("url", ""),
+                title=s.get("title", ""),
+                snippet=s.get("snippet", "")
+            )
+            for s in raw_sources
+        ]
+        
+        # Convert tool_calls with sources
+        tool_calls = []
+        for tc in result.get("tool_calls", []):
+            tc_sources = [
+                WebSource(
+                    url=s.get("url", ""),
+                    title=s.get("title", ""),
+                    snippet=s.get("snippet", "")
+                )
+                for s in tc.get("sources", [])
+            ]
+            
+            tool_calls.append(ToolCall(
+                type=tc.get("type", "unknown"),
+                formula=tc.get("formula"),
+                code=tc.get("code"),
+                query=tc.get("query"),
+                sheet=tc.get("sheet"),
+                result=tc.get("result"),
+                sources=tc_sources
+            ))
         
         # Generate follow-up suggestions
         followups = []
@@ -153,8 +203,9 @@ async def chat_endpoint(
             response=response_text,
             model=result.get("model", "unknown"),
             conversation_id=conversation_id,
-            tool_calls=result.get("tool_calls", []),
-            followups=followups
+            tool_calls=tool_calls,
+            followups=followups,
+            sources=sources
         )
     
     except Exception as e:
@@ -176,6 +227,7 @@ async def chat_endpoint(
             conversation_id=request.conversation_id,
             tool_calls=[],
             followups=[FollowupSuggestion(text=s) for s in friendly.get("suggestions", []) if s],
+            sources=[],
             error=friendly
         )
 
@@ -192,6 +244,7 @@ class QuickChatRequest(BaseModel):
 class QuickChatResponse(BaseModel):
     answer: str
     followups: list[str] = []
+    sources: list[WebSource] = []  # Include sources here too
 
 
 @router.post("/chat/quick", response_model=QuickChatResponse)
@@ -212,6 +265,17 @@ async def quick_chat(
         
         answer = result.get("response", "")
         
+        # Extract sources
+        raw_sources = result.get("sources", [])
+        sources = [
+            WebSource(
+                url=s.get("url", ""),
+                title=s.get("title", ""),
+                snippet=s.get("snippet", "")
+            )
+            for s in raw_sources
+        ]
+        
         # Generate followups
         followups = []
         try:
@@ -222,11 +286,13 @@ async def quick_chat(
         
         return QuickChatResponse(
             answer=answer,
-            followups=followups
+            followups=followups,
+            sources=sources
         )
     
     except Exception as e:
         return QuickChatResponse(
             answer="Sorry, something went wrong. Try asking a different way.",
-            followups=["What are the totals?", "Show me a summary"]
+            followups=["What are the totals?", "Show me a summary"],
+            sources=[]
         )

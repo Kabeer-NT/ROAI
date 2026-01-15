@@ -26,9 +26,9 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting up optimized services...")
     
     # Import services here to avoid circular imports
-    from app.services import claude_optimized as claude
-    from app.services import suggestions_optimized as suggestions
-    from app.services import spreadsheet_optimized as spreadsheet
+    from app.services import claude as claude
+    from app.services import suggestions as suggestions
+    from app.services import spreadsheet as spreadsheet
     
     # Pre-warm HTTP clients
     await claude.startup()
