@@ -1862,3 +1862,664 @@
     font-size: 12px;
   }
 }
+/* ============================================================================
+   WORK MODE STYLES
+   Mode toggle, split layout, workspace panel, and selection action menu
+   ============================================================================ */
+
+/* ============================================================================
+   Mode Toggle Bar
+   ============================================================================ */
+
+.mode-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.mode-toggle {
+  display: flex;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  gap: 4px;
+}
+
+.mode-toggle .mode-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mode-toggle .mode-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.mode-toggle .mode-btn.active {
+  background: var(--accent);
+  color: var(--bg-base);
+}
+
+/* ============================================================================
+   Content Area Layout
+   ============================================================================ */
+
+.content-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Reference mode - chat takes full width */
+.main.reference-mode .content-area {
+  flex-direction: column;
+}
+
+.main.reference-mode .chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Work mode - side by side */
+.main.work-mode .content-area {
+  flex-direction: row;
+}
+
+.main.work-mode .workspace-panel {
+  flex: 1 1 60%;
+  min-width: 400px;
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.main.work-mode .chat-panel {
+  flex: 1 1 40%;
+  min-width: 320px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+}
+
+.main.work-mode .chat-panel .chat-area {
+  padding: var(--space-4);
+}
+
+.main.work-mode .chat-panel .input-container {
+  padding: var(--space-4);
+}
+
+/* ============================================================================
+   Workspace Panel Container
+   ============================================================================ */
+
+.workspace-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
+}
+
+.workspace-file-bar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+/* File Selector */
+.file-selector {
+  position: relative;
+}
+
+.file-selector-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.file-selector-btn:hover {
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+}
+
+.file-selector-btn .file-icon {
+  color: #22c55e;
+}
+
+.file-selector-btn .file-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-selector-btn .chevron {
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.file-selector-btn .chevron.open {
+  transform: rotate(180deg);
+}
+
+.file-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  animation: dropdownSlide 0.15s ease-out;
+}
+
+.file-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.file-option:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.file-option.active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.file-option svg {
+  color: #22c55e;
+}
+
+/* ============================================================================
+   StructureViewer - Inline Mode
+   ============================================================================ */
+
+.structure-viewer-inline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.structure-viewer-inline .structure-viewer-header {
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.structure-viewer-inline .structure-viewer-title {
+  font-size: 13px;
+}
+
+.structure-viewer-inline .structure-viewer-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.structure-viewer-inline .structure-viewer-footer {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: var(--space-4);
+}
+
+.structure-viewer-inline .structure-viewer-footer .hidden-count {
+  color: var(--error);
+}
+
+.structure-viewer-inline .structure-viewer-footer .visible-count {
+  color: var(--success);
+}
+
+/* ============================================================================
+   Selection Action Menu (iOS-style floating menu)
+   ============================================================================ */
+
+.selection-action-menu {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 1000;
+  animation: actionMenuIn 0.15s ease-out;
+  overflow: hidden;
+  min-width: 180px;
+}
+
+@keyframes actionMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.action-menu-header {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.action-menu-range {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.action-menu-buttons {
+  display: flex;
+  flex-direction: column;
+}
+
+.action-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.action-menu-btn:hover {
+  background: var(--bg-hover);
+}
+
+.action-menu-btn.ask-ai {
+  color: var(--accent);
+}
+
+.action-menu-btn.ask-ai:hover {
+  background: var(--accent-muted);
+}
+
+.action-menu-btn.ask-ai svg {
+  color: var(--accent);
+}
+
+.action-menu-btn.hide svg {
+  color: var(--error);
+}
+
+.action-menu-btn.hide:hover {
+  background: var(--error-muted);
+  color: var(--error);
+}
+
+.action-menu-btn.show svg {
+  color: var(--success);
+}
+
+.action-menu-btn.show:hover {
+  background: var(--success-muted);
+  color: var(--success);
+}
+
+/* ============================================================================
+   Grid Selection Styles
+   ============================================================================ */
+
+.structure-grid.selecting {
+  user-select: none;
+}
+
+.structure-grid .grid-cell.in-selection {
+  background: var(--accent-muted) !important;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Clickable headers */
+.structure-grid .col-header.clickable,
+.structure-grid .row-header.clickable {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.structure-grid .col-header.clickable:hover,
+.structure-grid .row-header.clickable:hover {
+  background: var(--bg-hover);
+}
+
+/* Selected headers */
+.structure-grid .col-header.selected,
+.structure-grid .row-header.selected {
+  background: var(--accent-muted) !important;
+  color: var(--accent) !important;
+}
+
+.structure-grid .col-header.selected .col-letter,
+.structure-grid .row-header.selected .row-number {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ============================================================================
+   Responsive - Mobile (stack vertically)
+   ============================================================================ */
+
+@media (max-width: 900px) {
+  .main.work-mode .content-area {
+    flex-direction: column;
+  }
+  
+  .main.work-mode .workspace-panel {
+    flex: 0 0 50%;
+    min-width: 0;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  
+  .main.work-mode .chat-panel {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+}
+
+/* ============================================================================
+   Light Theme Overrides
+   ============================================================================ */
+
+[data-theme="light"] .mode-toggle {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn.active {
+  background: #d97706;
+  color: white;
+}
+
+[data-theme="light"] .file-selector-btn {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .file-dropdown {
+  background: white;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .selection-action-menu {
+  background: white;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .action-menu-header {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .action-menu-btn:hover {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .action-menu-btn.ask-ai:hover {
+  background: rgba(217, 119, 6, 0.1);
+}
+
+[data-theme="light"] .structure-grid .grid-cell.in-selection {
+  background: rgba(217, 119, 6, 0.15) !important;
+  outline-color: #d97706;
+}
+
+[data-theme="light"] .structure-grid .col-header.selected,
+[data-theme="light"] .structure-grid .row-header.selected {
+  background: rgba(217, 119, 6, 0.15) !important;
+  color: #d97706 !important;
+}
+
+[data-theme="light"] .structure-grid .col-header.clickable:hover,
+[data-theme="light"] .structure-grid .row-header.clickable:hover {
+  background: #e2e8f0;
+}
+
+/* ============================================================================
+   Selection Context Chip - Shows selected cells above chat input
+   ============================================================================ */
+
+.chat-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* The context chip that appears above the input */
+.selection-context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  color: var(--text-secondary);
+  width: fit-content;
+  animation: chip-appear 0.2s ease-out;
+}
+
+@keyframes chip-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.selection-context-chip .chip-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.selection-context-chip .chip-sheet {
+  color: var(--text-primary);
+  font-weight: 500;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-context-chip .chip-range {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--accent-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.selection-context-chip .chip-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  margin-left: var(--space-1);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.selection-context-chip .chip-dismiss:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+/* Chat input adjustments when context is present */
+.chat-input.has-context {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-muted);
+}
+
+/* ============================================================================
+   Chat Input Base Styles (in case not defined elsewhere)
+   ============================================================================ */
+
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-input:focus-within {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 1px var(--border-active);
+}
+
+.input-textarea {
+  flex: 1;
+  min-height: 24px;
+  max-height: 200px;
+  padding: var(--space-1) 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  resize: none;
+}
+
+.input-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input-action-btn,
+.input-send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.input-action-btn:hover:not(:disabled),
+.input-send-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.input-send-btn:not(:disabled) {
+  color: var(--accent);
+}
+
+.input-send-btn:hover:not(:disabled) {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.input-action-btn:disabled,
+.input-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+   Dark Theme Adjustments
+   ============================================================================ */
+
+[data-theme="dark"] .selection-context-chip {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+
+[data-theme="dark"] .selection-context-chip .chip-range {
+  background: rgba(var(--accent-rgb), 0.15);
+}
+
+/* ============================================================================
+   Work Mode - Narrower input in split view
+   ============================================================================ */
+
+.main.work-mode .chat-input-wrapper {
+  max-width: 100%;
+}
+
+.main.work-mode .selection-context-chip {
+  max-width: 100%;
+}
+
+.main.work-mode .selection-context-chip .chip-sheet {
+  max-width: 80px;
+}
