@@ -1,104 +1,154 @@
-import { useState, useRef, useEffect } from 'react'
-import { Paperclip, Send } from 'lucide-react'
+import { useState, useRef, useEffect, KeyboardEvent } from 'react'
+import { Send, Plus, X, Table } from 'lucide-react'
+import type { SelectionRange } from './StructureViewer'
+
+// ============================================================================
+// ChatInput - Text input with file upload and selection context support
+// ============================================================================
 
 interface ChatInputProps {
-  onSend: (message: string) => void
-  onFilesAdd: (files: FileList) => void
+  onSend: (message: string, selectionContext?: SelectionRange) => void
+  onFilesAdd?: (files: FileList) => void
   onFilePickerOpen?: () => Promise<boolean>
-  disabled: boolean
-  placeholder?: string
+  disabled?: boolean
   hasFiles?: boolean
+  // Selection context from "Ask R-O-AI" action
+  selectionContext?: SelectionRange | null
+  onClearSelection?: () => void
 }
 
-export function ChatInput({ 
-  onSend, 
-  onFilesAdd, 
-  onFilePickerOpen, 
-  disabled, 
-  placeholder,
-  hasFiles = false 
+export function ChatInput({
+  onSend,
+  onFilesAdd,
+  onFilePickerOpen,
+  disabled = false,
+  hasFiles = false,
+  selectionContext,
+  onClearSelection,
 }: ChatInputProps) {
   const [input, setInput] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Better default placeholder based on state
-  const defaultPlaceholder = hasFiles 
-    ? 'Ask a question about your data...'
-    : 'Type a message...'
-
+  // Focus textarea when selection context is set
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px'
+    if (selectionContext && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [selectionContext])
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.style.height = 'auto'
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
     }
   }, [input])
 
   const handleSubmit = () => {
-    if (input.trim() && !disabled) {
-      onSend(input)
-      setInput('')
+    const trimmed = input.trim()
+    if (!trimmed || disabled) return
+    
+    onSend(trimmed, selectionContext || undefined)
+    setInput('')
+    onClearSelection?.()
+    
+    // Reset textarea height
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
   }
 
-  const handleAttachClick = async () => {
+  const handleFileClick = async () => {
+    // Try File System Access API first
     if (onFilePickerOpen) {
       const handled = await onFilePickerOpen()
       if (handled) return
     }
+    // Fallback to input element
     fileInputRef.current?.click()
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
+    if (e.target.files && e.target.files.length > 0 && onFilesAdd) {
       onFilesAdd(e.target.files)
-      e.target.value = ''
+      e.target.value = '' // Reset for next upload
     }
   }
 
+  const placeholder = selectionContext
+    ? `Ask about ${selectionContext.rangeString}...`
+    : hasFiles
+    ? 'Ask about your spreadsheet...'
+    : 'Upload a spreadsheet to get started...'
+
   return (
-    <div className="input-wrapper">
-      <div className="input-box">
+    <div className="chat-input-wrapper">
+      {/* Selection Context Chip */}
+      {selectionContext && (
+        <div className="selection-context-chip">
+          <Table size={14} className="chip-icon" />
+          <span className="chip-sheet">{selectionContext.sheetName}</span>
+          <span className="chip-range">{selectionContext.rangeString}</span>
+          <button 
+            className="chip-dismiss"
+            onClick={onClearSelection}
+            aria-label="Clear selection"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      
+      {/* Input Area */}
+      <div className={`chat-input ${selectionContext ? 'has-context' : ''}`}>
         <button
-          className="attach-btn"
-          onClick={handleAttachClick}
-          title="Upload spreadsheet"
+          className="input-action-btn"
+          onClick={handleFileClick}
+          disabled={disabled}
+          aria-label="Add file"
         >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,.tsv"
-            multiple
-            onChange={handleFileChange}
-            hidden
-          />
-          <Paperclip size={18} />
+          <Plus size={20} />
         </button>
+        
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder || defaultPlaceholder}
-          rows={1}
+          placeholder={placeholder}
           disabled={disabled}
+          rows={1}
+          className="input-textarea"
         />
+        
         <button
-          className="send-btn"
+          className="input-send-btn"
           onClick={handleSubmit}
           disabled={disabled || !input.trim()}
+          aria-label="Send message"
         >
           <Send size={18} />
         </button>
+        
+        {/* Hidden file input for fallback */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xlsx,.xls,.csv,.tsv"
+          multiple
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
       </div>
-      <div className="input-hint">Press Enter to send · Shift+Enter for new line</div>
     </div>
   )
 }
