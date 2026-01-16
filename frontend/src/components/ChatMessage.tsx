@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Copy, Check, User, Hexagon } from 'lucide-react'
-import type { Message } from '../types'
+import type { Message, WebSource } from '../types'
 import { ThinkingBlock } from './ThinkingBlock'
 import { FollowupChips } from './FollowUpChips'
 import { SourcesList } from './SourcesList'
@@ -37,10 +37,30 @@ export function ChatMessage({ message, onFollowupClick, isLatest = false, disabl
     message.followups.length > 0 &&
     onFollowupClick
 
-  const showSources = 
-    message.role === 'assistant' &&
-    message.sources &&
-    message.sources.length > 0
+  // Collect sources from message.sources OR from tool calls
+  const collectSources = (): WebSource[] => {
+    // First check if message has sources directly
+    if (message.sources && message.sources.length > 0) {
+      return message.sources
+    }
+    
+    // Otherwise, extract from tool calls (web_search results)
+    if (message.toolCalls && message.toolCalls.length > 0) {
+      const allSources: WebSource[] = []
+      for (const tc of message.toolCalls) {
+        const sources = (tc as any).sources
+        if (Array.isArray(sources)) {
+          allSources.push(...sources)
+        }
+      }
+      return allSources
+    }
+    
+    return []
+  }
+
+  const allSources = collectSources()
+  const showSources = message.role === 'assistant' && allSources.length > 0
 
   return (
     <div className={`message ${message.role}`}>
@@ -68,6 +88,14 @@ export function ChatMessage({ message, onFollowupClick, isLatest = false, disabl
         {message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0 && (
           <ThinkingBlock toolCalls={message.toolCalls} />
         )}
+
+        {/* Show sources as separate collapsible dropdown */}
+        {showSources && (
+          <SourcesList 
+            sources={allSources} 
+            className="message-sources"
+          />
+        )}
         
         <div className="message-content">
           <ReactMarkdown
@@ -87,15 +115,6 @@ export function ChatMessage({ message, onFollowupClick, isLatest = false, disabl
             {message.content}
           </ReactMarkdown>
         </div>
-
-        {/* Show web sources for messages with search results */}
-        {showSources && (
-          <SourcesList 
-            sources={message.sources!} 
-            className="message-sources"
-            maxVisible={3}
-          />
-        )}
 
         {/* Show followup chips for the latest assistant message */}
         {showFollowups && (
