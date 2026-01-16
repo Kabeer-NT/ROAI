@@ -5,6 +5,7 @@ Features:
 - Follow-up suggestions after every response
 - Better error handling with friendly messages
 - Web search source citations for transparency
+- Selection context for focused cell analysis
 """
 
 from fastapi import APIRouter, Depends
@@ -45,12 +46,22 @@ class SheetVisibility(BaseModel):
     hiddenCells: list[str] = []
 
 
+class SelectionContext(BaseModel):
+    """Context about user's selected cells in the spreadsheet."""
+    sheetName: str
+    startCell: str
+    endCell: str
+    cells: list[str] = []
+    rangeString: str  # e.g., "A1:B5" or "A1" for single cell
+
+
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     model: Optional[str] = None
     conversation_id: Optional[int] = None
     visibility: Optional[dict[str, dict[str, dict]]] = None
     include_followups: bool = True
+    selection_context: Optional[SelectionContext] = None  # NEW: Selected cells context
 
 
 class WebSource(BaseModel):
@@ -99,11 +110,22 @@ async def chat_endpoint(
     user_question = request.messages[-1].content if request.messages else ""
     
     try:
-        # Call Claude with visibility settings
+        # Build selection context hint for Claude if provided
+        selection_hint = None
+        if request.selection_context:
+            sc = request.selection_context
+            selection_hint = {
+                "sheet": sc.sheetName,
+                "range": sc.rangeString,
+                "cells": sc.cells,
+            }
+        
+        # Call Claude with visibility settings and selection context
         result = await claude.chat(
             messages, 
             request.model,
-            visibility=request.visibility
+            visibility=request.visibility,
+            selection_context=selection_hint
         )
         
         response_text = result.get("response", "")
@@ -161,10 +183,16 @@ async def chat_endpoint(
         if request.include_followups and response_text:
             try:
                 ss_context = build_llm_context(visibility=request.visibility)
+                
+                # Include selection context in followup generation
+                followup_context = ss_context
+                if request.selection_context:
+                    followup_context += f"\n[User was asking about cells {request.selection_context.rangeString} on sheet \"{request.selection_context.sheetName}\"]"
+                
                 followup_result = await generate_followups(
                     user_question,
                     response_text,
-                    ss_context
+                    followup_context
                 )
                 
                 followups = [
@@ -239,6 +267,7 @@ async def chat_endpoint(
 class QuickChatRequest(BaseModel):
     question: str
     file_id: Optional[str] = None
+    selection_context: Optional[SelectionContext] = None  # NEW
 
 
 class QuickChatResponse(BaseModel):
@@ -257,10 +286,21 @@ async def quick_chat(
     Doesn't save to conversation history.
     """
     try:
+        # Build selection hint if provided
+        selection_hint = None
+        if request.selection_context:
+            sc = request.selection_context
+            selection_hint = {
+                "sheet": sc.sheetName,
+                "range": sc.rangeString,
+                "cells": sc.cells,
+            }
+        
         result = await claude.chat(
             messages=[{"role": "user", "content": request.question}],
             model=None,
-            visibility=None
+            visibility=None,
+            selection_context=selection_hint
         )
         
         answer = result.get("response", "")
