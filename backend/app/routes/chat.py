@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.services.db import get_db
 from app.services.auth import get_current_user
 from app.services import claude as claude 
-from app.services.spreadsheet import ( 
+from app.services.spreadsheet import (
     build_llm_context, 
     spreadsheet_context, 
     list_available_files, 
