@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Code, Database, Search, CheckCircle, ArrowRight, Globe, ExternalLink } from 'lucide-react'
-import type { ToolCall, WebSource } from '../types'
+import { ChevronDown, ChevronRight, Code, Database, Search, CheckCircle, ArrowRight } from 'lucide-react'
+import type { ToolCall } from '../types'
 
 interface ThinkingBlockProps {
   toolCalls: ToolCall[]
@@ -42,13 +42,6 @@ export function ThinkingBlock({ toolCalls }: ThinkingBlockProps) {
     return String(result)
   }
 
-  // Count total sources across all web search calls
-  // Using (tc as any) because sources may not be in the type yet
-  const totalSources = toolCalls.reduce((sum, tc) => {
-    const sources = (tc as any).sources
-    return sum + (Array.isArray(sources) ? sources.length : 0)
-  }, 0)
-
   return (
     <div className="thinking-block">
       <button 
@@ -58,23 +51,13 @@ export function ThinkingBlock({ toolCalls }: ThinkingBlockProps) {
         {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <span className="thinking-title">
           Thinking ({toolCalls.length} operation{toolCalls.length !== 1 ? 's' : ''})
-          {totalSources > 0 && (
-            <span className="thinking-sources-badge">
-              <Globe size={10} />
-              {totalSources} source{totalSources !== 1 ? 's' : ''}
-            </span>
-          )}
         </span>
         <CheckCircle size={14} className="thinking-done" />
       </button>
       
       {isExpanded && (
         <div className="thinking-content">
-          {toolCalls.map((call, idx) => {
-            // Get sources from the tool call (may be undefined in older types)
-            const sources: WebSource[] = (call as any).sources || []
-            
-            return (
+          {toolCalls.map((call, idx) => (
             <div key={idx} className="tool-call">
               <div className="tool-call-header">
                 {getIcon(call.type)}
@@ -104,70 +87,11 @@ export function ThinkingBlock({ toolCalls }: ThinkingBlockProps) {
                   <ArrowRight size={12} className="result-label" />
                   <span className="result-value">{formatResult(call.result)}</span>
                 </div>
-
-                {/* Show sources for web search */}
-                {call.type === 'web_search' && sources.length > 0 && (
-                  <ToolCallSources sources={sources} />
-                )}
               </div>
             </div>
-            )
-          })}
+          ))}
         </div>
       )}
-    </div>
-  )
-}
-
-/**
- * Compact sources display within a tool call
- */
-function ToolCallSources({ sources }: { sources: WebSource[] }) {
-  const [showAll, setShowAll] = useState(false)
-  
-  const getDomain = (url: string): string => {
-    try {
-      return new URL(url).hostname.replace(/^www\./, '')
-    } catch {
-      return url
-    }
-  }
-
-  const visibleSources = showAll ? sources : sources.slice(0, 3)
-  const hasMore = sources.length > 3
-
-  return (
-    <div className="tool-call-sources">
-      <div className="tool-call-sources-header">
-        <Globe size={10} />
-        <span>Sources ({sources.length})</span>
-      </div>
-      <div className="tool-call-sources-list">
-        {visibleSources.map((source, idx) => (
-          <a
-            key={`${source.url}-${idx}`}
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tool-call-source-item"
-            title={source.title || source.url}
-          >
-            <span className="source-domain">{getDomain(source.url)}</span>
-            <ExternalLink size={10} />
-          </a>
-        ))}
-        {hasMore && !showAll && (
-          <button 
-            className="tool-call-sources-more"
-            onClick={(e) => {
-              e.stopPropagation()
-              setShowAll(true)
-            }}
-          >
-            +{sources.length - 3} more
-          </button>
-        )}
-      </div>
     </div>
   )
 }
