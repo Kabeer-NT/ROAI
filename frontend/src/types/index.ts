@@ -60,6 +60,21 @@ export interface SpreadsheetFile {
 }
 
 // ============================================================================
+// Selection Types (for Ask R-O-AI feature)
+// ============================================================================
+
+/**
+ * Selection range from StructureViewer when user selects cells
+ */
+export interface SelectionRange {
+  sheetName: string
+  startCell: string
+  endCell: string
+  cells: string[]
+  rangeString: string // e.g., "A1:B5" or "A1" for single cell
+}
+
+// ============================================================================
 // Enhanced Response Types (from backend)
 // ============================================================================
 
