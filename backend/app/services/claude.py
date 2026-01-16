@@ -446,7 +446,8 @@ async def list_models() -> dict:
 async def chat(
     messages: list[dict],
     model: Optional[str] = None,
-    visibility: Optional[dict] = None
+    visibility: Optional[dict] = None,
+    selection_context: Optional[dict] = None
 ) -> dict:
     """
     Two-call stateless chat with visibility support.
@@ -460,6 +461,7 @@ async def chat(
         messages: Chat messages
         model: Model to use (optional)
         visibility: Dict of file_id -> {hiddenColumns, hiddenRows, hiddenCells}
+        selection_context: Optional dict with {sheet, range, cells} for focused analysis
     
     Returns:
         Response dict with 'response', 'model', and 'tool_calls'
@@ -489,6 +491,19 @@ async def chat(
         print("📊 Call 1: ANALYZE")
         
         analyze_system = ANALYZE_PROMPT + f"\n\n## SPREADSHEET STRUCTURE:\n{spreadsheet_context}"
+        
+        # Add selection context if user selected specific cells
+        if selection_context:
+            selection_hint = f"""
+
+## USER SELECTION CONTEXT:
+The user has selected specific cells to ask about:
+- Sheet: "{selection_context.get('sheet', 'unknown')}"
+- Range: {selection_context.get('range', 'unknown')}
+
+Focus your analysis on this specific range. When using formulas or pandas, target these cells specifically."""
+            analyze_system += selection_hint
+            print(f"   📍 Selection context: {selection_context.get('range')} on {selection_context.get('sheet')}")
         
         analyze_response = await _api_call_with_retry(
             messages=[{"role": "user", "content": user_question}],
