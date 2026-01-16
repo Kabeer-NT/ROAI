@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { MessageSquare, LayoutGrid } from 'lucide-react'
+import { MessageSquare, LayoutGrid, ChevronLeft, ChevronRight, Hexagon } from 'lucide-react'
 import {
   Sidebar,
   ChatMessage,
@@ -10,7 +10,7 @@ import {
   useToast,
   WorkspacePanel,
 } from '../components'
-import type { SelectionRange } from '../components/StructureViewer'
+import type { SelectionRange } from '../types'
 import {
   useModels,
   useSpreadsheets,
@@ -29,6 +29,9 @@ export function ChatPage() {
   // View mode (reference = chat only, work = split view)
   const [viewMode, setViewMode] = useState<ViewMode>('reference')
   
+  // Chat panel collapsed state (only applies in work mode)
+  const [chatCollapsed, setChatCollapsed] = useState(false)
+  
   // Active file for work mode (which file to show in the workspace)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
   
@@ -37,6 +40,11 @@ export function ChatPage() {
   
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  
+  // Resizable divider state - workspace width percentage (0-100)
+  const [workspaceWidth, setWorkspaceWidth] = useState(60)
+  const isDragging = useRef(false)
+  const contentAreaRef = useRef<HTMLDivElement>(null)
   
   // Model selection
   const { models, selectedModel, setSelectedModel } = useModels()
@@ -112,6 +120,50 @@ export function ChatPage() {
       setShowSuggestions(false)
     }
   }, [files.length, showSuggestions])
+  
+  // Auto-expand chat when user clicks "Ask R-O-AI"
+  useEffect(() => {
+    if (selectionContext && chatCollapsed) {
+      setChatCollapsed(false)
+    }
+  }, [selectionContext, chatCollapsed])
+  
+  // Resizable divider handlers
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+  
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !contentAreaRef.current) return
+      
+      const rect = contentAreaRef.current.getBoundingClientRect()
+      const newWidth = ((e.clientX - rect.left) / rect.width) * 100
+      
+      // Clamp between 30% and 80%
+      const clampedWidth = Math.min(80, Math.max(30, newWidth))
+      setWorkspaceWidth(clampedWidth)
+    }
+    
+    const handleMouseUp = () => {
+      if (isDragging.current) {
+        isDragging.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [])
   
   // File picker with File System Access API
   const handleFilePickerOpen = useCallback(async () => {
@@ -190,7 +242,7 @@ export function ChatPage() {
   // Handle "Ask R-O-AI" from cell selection - just set the context, don't auto-send
   const handleAskAI = useCallback((selection: SelectionRange) => {
     setSelectionContext(selection)
-    // Don't auto-send - let user type their question
+    // Chat will auto-expand via useEffect above
   }, [])
   
   // Clear selection context
@@ -229,6 +281,9 @@ export function ChatPage() {
   
   // Get the active file object
   const activeFile = files.find(f => f.id === activeFileId) || null
+
+  // Determine if chat should show collapsed state
+  const showCollapsedChat = viewMode === 'work' && chatCollapsed
 
   return (
     <div className="app" data-theme={theme}>
@@ -275,59 +330,114 @@ export function ChatPage() {
         )}
         
         {/* Main Content Area */}
-        <div className="content-area">
+        <div className="content-area" ref={contentAreaRef}>
           {/* Workspace Panel - only in work mode with files */}
           {viewMode === 'work' && activeFile && (
-            <div className="workspace-panel">
-              <WorkspacePanel
-                file={activeFile}
-                files={files}
-                onFileSelect={setActiveFileId}
-                fileVisibility={getFileVisibility(activeFile.filename)}
-                onFileVisibilityChange={(vis) => setFileVisibility(activeFile.filename, vis)}
-                onAskAI={handleAskAI}
-              />
-            </div>
-          )}
-          
-          {/* Chat Panel */}
-          <div className={`chat-panel ${viewMode === 'work' ? 'narrow' : 'full'}`}>
-            <div className="chat-area">
-              {!hasMessages ? (
-                <Welcome
-                  onHintClick={handleHintClick}
-                  hasFiles={hasFiles}
-                  showSuggestions={showSuggestions}
+            <>
+              <div 
+                className={`workspace-panel ${showCollapsedChat ? 'expanded' : ''}`}
+                style={{ 
+                  flex: showCollapsedChat ? 1 : `0 0 ${workspaceWidth}%`,
+                  maxWidth: showCollapsedChat ? 'none' : `${workspaceWidth}%`
+                }}
+              >
+                <WorkspacePanel
+                  file={activeFile}
+                  files={files}
+                  onFileSelect={setActiveFileId}
+                  fileVisibility={getFileVisibility(activeFile.filename)}
+                  onFileVisibilityChange={(vis) => setFileVisibility(activeFile.filename, vis)}
+                  onAskAI={handleAskAI}
                 />
-              ) : (
-                <div className="messages">
-                  {messages.map((message, idx) => (
-                    <ChatMessage
-                      key={message.id}
-                      message={message}
-                      onFollowupClick={handleFollowupClick}
-                      isLatest={idx === messages.length - 1 && message.role === 'assistant'}
-                      disabled={isLoading}
-                    />
-                  ))}
-                  {isLoading && <LoadingMessage />}
-                  <div ref={messagesEndRef} />
+              </div>
+              
+              {/* Resizable Divider - only show when chat is not collapsed */}
+              {!showCollapsedChat && (
+                <div 
+                  className="panel-divider"
+                  onMouseDown={handleDividerMouseDown}
+                >
+                  <div className="divider-handle" />
                 </div>
               )}
+            </>
+          )}
+          
+          {/* Chat Panel - Collapsible in work mode */}
+          {showCollapsedChat ? (
+            <div className="chat-panel-collapsed">
+              <button 
+                className="chat-expand-btn"
+                onClick={() => setChatCollapsed(false)}
+                title="Expand chat"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="chat-collapsed-icon">
+                <Hexagon size={24} />
+              </div>
+              <span className="chat-collapsed-label">R-O-AI</span>
+              {messages.length > 0 && (
+                <span className="chat-collapsed-badge">{messages.length}</span>
+              )}
             </div>
-            
-            <div className="input-container">
-              <ChatInput
-                onSend={handleSendMessage}
-                onFilesAdd={handleFilesAdd}
-                onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
-                disabled={isLoading}
-                hasFiles={hasFiles}
-                selectionContext={selectionContext}
-                onClearSelection={handleClearSelection}
-              />
+          ) : (
+            <div 
+              className={`chat-panel ${viewMode === 'work' ? 'narrow' : 'full'}`}
+              style={viewMode === 'work' ? { 
+                flex: `0 0 ${100 - workspaceWidth}%`,
+                maxWidth: `${100 - workspaceWidth}%`,
+                minWidth: '280px'
+              } : undefined}
+            >
+              {/* Collapse button - only in work mode */}
+              {viewMode === 'work' && (
+                <button 
+                  className="chat-collapse-btn"
+                  onClick={() => setChatCollapsed(true)}
+                  title="Collapse chat"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              )}
+              
+              <div className="chat-area">
+                {!hasMessages ? (
+                  <Welcome
+                    onHintClick={handleHintClick}
+                    hasFiles={hasFiles}
+                    showSuggestions={showSuggestions}
+                  />
+                ) : (
+                  <div className="messages">
+                    {messages.map((message, idx) => (
+                      <ChatMessage
+                        key={message.id}
+                        message={message}
+                        onFollowupClick={handleFollowupClick}
+                        isLatest={idx === messages.length - 1 && message.role === 'assistant'}
+                        disabled={isLoading}
+                      />
+                    ))}
+                    {isLoading && <LoadingMessage />}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+              
+              <div className="input-container">
+                <ChatInput
+                  onSend={handleSendMessage}
+                  onFilesAdd={handleFilesAdd}
+                  onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
+                  disabled={isLoading}
+                  hasFiles={hasFiles}
+                  selectionContext={selectionContext}
+                  onClearSelection={handleClearSelection}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
       
