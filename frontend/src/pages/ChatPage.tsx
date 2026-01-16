@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { MessageSquare, LayoutGrid } from 'lucide-react'
 import {
   Sidebar,
   ChatMessage,
@@ -7,7 +8,9 @@ import {
   Welcome,
   ToastContainer,
   useToast,
+  WorkspacePanel,
 } from '../components'
+import type { SelectionRange } from '../components/StructureViewer'
 import {
   useModels,
   useSpreadsheets,
@@ -17,9 +20,20 @@ import {
   useVisibility,
 } from '../hooks'
 
+type ViewMode = 'reference' | 'work'
+
 export function ChatPage() {
   // Theme
   const { theme, toggleTheme } = useTheme()
+  
+  // View mode (reference = chat only, work = split view)
+  const [viewMode, setViewMode] = useState<ViewMode>('reference')
+  
+  // Active file for work mode (which file to show in the workspace)
+  const [activeFileId, setActiveFileId] = useState<string | null>(null)
+  
+  // Selection context for chat (when user selects cells and clicks "Ask R-O-AI")
+  const [selectionContext, setSelectionContext] = useState<SelectionRange | null>(null)
   
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -46,7 +60,7 @@ export function ChatPage() {
   } = useVisibility()
   
   // Chat with visibility support
-  const { messages, isLoading, sendMessage } = useChat(
+  const { messages, isLoading, sendMessage: sendChatMessage } = useChat(
     selectedModel,
     files,
     { getAllSerializedVisibility }
@@ -165,17 +179,56 @@ export function ChatPage() {
   
   // Click handlers
   const handleHintClick = useCallback((hint: string) => {
-    sendMessage(hint)
+    sendChatMessage(hint)
     setShowSuggestions(false)
-  }, [sendMessage])
+  }, [sendChatMessage])
   
   const handleFollowupClick = useCallback((text: string) => {
-    sendMessage(text)
-  }, [sendMessage])
+    sendChatMessage(text)
+  }, [sendChatMessage])
+  
+  // Handle "Ask R-O-AI" from cell selection - just set the context, don't auto-send
+  const handleAskAI = useCallback((selection: SelectionRange) => {
+    setSelectionContext(selection)
+    // Don't auto-send - let user type their question
+  }, [])
+  
+  // Clear selection context
+  const handleClearSelection = useCallback(() => {
+    setSelectionContext(null)
+  }, [])
+  
+  // Send message with optional selection context
+  const handleSendMessage = useCallback((message: string, context?: SelectionRange) => {
+    // If we have selection context, prepend it to the message for Claude
+    if (context) {
+      const contextPrefix = `[Context: Looking at cells ${context.rangeString} on sheet "${context.sheetName}"]\n\n`
+      sendChatMessage(contextPrefix + message)
+    } else {
+      sendChatMessage(message)
+    }
+    // Clear selection after sending
+    setSelectionContext(null)
+  }, [sendChatMessage])
   
   // Derived state
   const hasMessages = messages.length > 0
   const hasFiles = files.length > 0
+  
+  // Auto-select first file for work mode when files change
+  useEffect(() => {
+    if (files.length > 0 && !activeFileId) {
+      setActiveFileId(files[0].id)
+    } else if (files.length === 0) {
+      setActiveFileId(null)
+    } else if (activeFileId && !files.find(f => f.id === activeFileId)) {
+      // Active file was removed, select another
+      setActiveFileId(files[0]?.id || null)
+    }
+  }, [files, activeFileId])
+  
+  // Get the active file object
+  const activeFile = files.find(f => f.id === activeFileId) || null
 
   return (
     <div className="app" data-theme={theme}>
@@ -198,39 +251,83 @@ export function ChatPage() {
         visibilityStats={visibilityStats}
       />
       
-      <main className="main">
-        <div className="chat-area">
-          {!hasMessages ? (
-            <Welcome
-              onHintClick={handleHintClick}
-              hasFiles={hasFiles}
-              showSuggestions={showSuggestions}
-            />
-          ) : (
-            <>
-              {messages.map((message, idx) => (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  onFollowupClick={handleFollowupClick}
-                  isLatest={idx === messages.length - 1 && message.role === 'assistant'}
-                  disabled={isLoading}
-                />
-              ))}
-              {isLoading && <LoadingMessage />}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
+      <main className={`main ${viewMode === 'work' ? 'work-mode' : 'reference-mode'}`}>
+        {/* Mode Toggle - only show when files are loaded */}
+        {hasFiles && (
+          <div className="mode-toggle-bar">
+            <div className="mode-toggle">
+              <button
+                className={`mode-btn ${viewMode === 'reference' ? 'active' : ''}`}
+                onClick={() => setViewMode('reference')}
+              >
+                <MessageSquare size={16} />
+                <span>Reference</span>
+              </button>
+              <button
+                className={`mode-btn ${viewMode === 'work' ? 'active' : ''}`}
+                onClick={() => setViewMode('work')}
+              >
+                <LayoutGrid size={16} />
+                <span>Work</span>
+              </button>
+            </div>
+          </div>
+        )}
         
-        <div className="input-container">
-          <ChatInput
-            onSend={sendMessage}
-            onFilesAdd={handleFilesAdd}
-            onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
-            disabled={isLoading}
-            hasFiles={hasFiles}
-          />
+        {/* Main Content Area */}
+        <div className="content-area">
+          {/* Workspace Panel - only in work mode with files */}
+          {viewMode === 'work' && activeFile && (
+            <div className="workspace-panel">
+              <WorkspacePanel
+                file={activeFile}
+                files={files}
+                onFileSelect={setActiveFileId}
+                fileVisibility={getFileVisibility(activeFile.filename)}
+                onFileVisibilityChange={(vis) => setFileVisibility(activeFile.filename, vis)}
+                onAskAI={handleAskAI}
+              />
+            </div>
+          )}
+          
+          {/* Chat Panel */}
+          <div className={`chat-panel ${viewMode === 'work' ? 'narrow' : 'full'}`}>
+            <div className="chat-area">
+              {!hasMessages ? (
+                <Welcome
+                  onHintClick={handleHintClick}
+                  hasFiles={hasFiles}
+                  showSuggestions={showSuggestions}
+                />
+              ) : (
+                <div className="messages">
+                  {messages.map((message, idx) => (
+                    <ChatMessage
+                      key={message.id}
+                      message={message}
+                      onFollowupClick={handleFollowupClick}
+                      isLatest={idx === messages.length - 1 && message.role === 'assistant'}
+                      disabled={isLoading}
+                    />
+                  ))}
+                  {isLoading && <LoadingMessage />}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+            
+            <div className="input-container">
+              <ChatInput
+                onSend={handleSendMessage}
+                onFilesAdd={handleFilesAdd}
+                onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
+                disabled={isLoading}
+                hasFiles={hasFiles}
+                selectionContext={selectionContext}
+                onClearSelection={handleClearSelection}
+              />
+            </div>
+          </div>
         </div>
       </main>
       
