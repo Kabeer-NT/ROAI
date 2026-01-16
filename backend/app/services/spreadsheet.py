@@ -1026,13 +1026,21 @@ def execute_python_query(code: str, file_id: str) -> Any:
     """
     Execute Python/pandas code on the spreadsheet data.
     Reuses cached DataFrames and workbooks for performance.
+    Captures stdout from print() statements.
     """
+    import sys
+    from io import StringIO
+    
     file_data = spreadsheet_context["files"].get(file_id)
     if not file_data:
         return {"error": "File not found"}
     
     filename = file_data["filename"]
     visibility = get_current_visibility()
+    
+    # Capture stdout
+    old_stdout = sys.stdout
+    sys.stdout = captured_output = StringIO()
     
     try:
         # Reuse already-parsed DataFrames (major optimization!)
@@ -1106,11 +1114,21 @@ def execute_python_query(code: str, file_id: str) -> Any:
             
             if is_assignment or is_print:
                 exec(clean_code, exec_globals)
-                result = "Code executed successfully"
+                # Check if anything was printed
+                printed = captured_output.getvalue().strip()
+                result = printed if printed else "Code executed successfully"
             else:
                 if len(lines) > 1:
                     exec('\n'.join(lines[:-1]), exec_globals)
                 result = eval(last_line, exec_globals)
+                # Also capture any printed output
+                printed = captured_output.getvalue().strip()
+                if printed:
+                    # Combine printed output with result
+                    if isinstance(result, str):
+                        result = f"{printed}\n\nResult: {result}"
+                    else:
+                        result = {"printed": printed, "result": result}
         
         # NOTE: We don't close wb - it's cached!
         
@@ -1125,6 +1143,9 @@ def execute_python_query(code: str, file_id: str) -> Any:
         
     except Exception as e:
         return {"error": str(e)}
+    finally:
+        # Restore stdout
+        sys.stdout = old_stdout
 
 
 # =============================================================================
