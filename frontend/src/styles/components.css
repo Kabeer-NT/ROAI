@@ -321,8 +321,8 @@
 
 .form-group input {
   padding: var(--space-3) var(--space-4);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
+  background: var(--input-bg-elevated);
+  border: 1px solid var(--input-border);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -353,8 +353,8 @@
   max-width: 800px;
   margin: 0 auto;
   padding: var(--space-3);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
   border-radius: var(--radius-xl);
   transition: all var(--transition-fast);
 }
@@ -390,6 +390,25 @@
   font-size: 11px;
   color: var(--text-muted);
   margin-top: var(--space-3);
+}
+
+/* Light Theme - Input Box Override */
+[data-theme="light"] .input-box {
+  background: #cbd5e1;
+  border-color: #64748b;
+}
+
+[data-theme="light"] .input-box:focus-within {
+  border-color: var(--accent);
+}
+
+[data-theme="light"] .attach-btn {
+  background: #b8c4d1;
+  border-color: #94a3b8;
+}
+
+[data-theme="light"] .attach-btn:hover {
+  background: #a8b8c8;
 }
 
 /* ============================================================================
@@ -1606,98 +1625,151 @@
   background: #d97706;
   color: white;
 }
+
 /* =============================================================================
-   Sources List Component Styles
+   Sources Colors - Theme-Aware Overrides
+   Add this at the END of components.css (replaces the previous sources section)
    ============================================================================= */
 
-/* Main sources list container */
+/* =============================================================================
+   Sources List Component - Collapsible Dropdown (like Thinking Block)
+   ============================================================================= */
+
+/* Main container - styled like thinking block */
 .sources-list {
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.03));
-  border-radius: 8px;
-  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  margin-top: 16px;
+  background: rgba(0, 255, 150, 0.08);
+  border: 1px solid rgba(0, 255, 150, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-[data-theme="dark"] .sources-list {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.08);
+[data-theme="light"] .sources-list {
+  background: rgba(0, 220, 130, 0.12);
+  border-color: rgba(0, 180, 100, 0.35);
 }
 
-/* Header */
-.sources-header {
+/* Collapsible Header Button - matches thinking-header style */
+.sources-header-btn {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-  font-size: 12px;
+  gap: 10px;
+  padding: 14px 18px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary, #666);
+  color: #00ff96;
+  font-family: var(--font-sans);
+  transition: background 0.15s ease;
+}
+
+.sources-header-btn:hover {
+  background: rgba(0, 255, 150, 0.12);
+}
+
+[data-theme="light"] .sources-header-btn {
+  color: #059669;
+}
+
+[data-theme="light"] .sources-header-btn:hover {
+  background: rgba(0, 220, 130, 0.18);
 }
 
 .sources-icon {
-  color: var(--accent-color, #3b82f6);
+  color: #00ff96;
+}
+
+[data-theme="light"] .sources-icon {
+  color: #059669;
 }
 
 .sources-title {
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  font-size: 11px;
+  flex: 1;
+  text-align: left;
 }
 
 .sources-count {
-  background: var(--accent-color, #3b82f6);
-  color: white;
+  background: #00ff96;
+  color: #0c0c0f;
   font-size: 10px;
-  padding: 2px 6px;
+  padding: 3px 10px;
   border-radius: 10px;
   font-weight: 600;
 }
 
-/* Source items container */
+[data-theme="light"] .sources-count {
+  background: #059669;
+  color: white;
+}
+
+/* Expandable Content Area */
+.sources-content {
+  border-top: 1px solid rgba(0, 255, 150, 0.2);
+  padding: 14px 18px;
+}
+
+[data-theme="light"] .sources-content {
+  border-top-color: rgba(0, 180, 100, 0.25);
+}
+
+/* Source items container - vertical list */
 .sources-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-/* Individual source item */
+/* Individual source item - clean row layout */
 .source-item {
   display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: var(--bg-primary, white);
-  border-radius: 6px;
-  border: 1px solid transparent;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 255, 150, 0.15);
   text-decoration: none;
   color: inherit;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
 .source-item:hover {
-  border-color: var(--accent-color, #3b82f6);
-  background: var(--bg-hover, rgba(59, 130, 246, 0.04));
-  transform: translateY(-1px);
+  border-color: #00ff96;
+  background: rgba(0, 255, 150, 0.15);
+  transform: translateX(4px);
 }
 
-[data-theme="dark"] .source-item {
-  background: rgba(255, 255, 255, 0.04);
+[data-theme="light"] .source-item {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(0, 180, 100, 0.2);
 }
 
-[data-theme="dark"] .source-item:hover {
-  background: rgba(59, 130, 246, 0.1);
+[data-theme="light"] .source-item:hover {
+  border-color: #059669;
+  background: rgba(0, 220, 130, 0.2);
 }
 
 /* Favicon */
 .source-favicon {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary, #f3f4f6);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   overflow: hidden;
+}
+
+[data-theme="light"] .source-favicon {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .source-favicon img {
@@ -1707,14 +1779,14 @@
 }
 
 .source-favicon-fallback {
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-muted);
 }
 
 .source-favicon-fallback.hidden {
   display: none;
 }
 
-/* Source content */
+/* Source content area */
 .source-content {
   flex: 1;
   min-width: 0;
@@ -1726,46 +1798,57 @@
 .source-title-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 .source-title {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-primary, #1f2937);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.source-external-icon {
-  flex-shrink: 0;
-  color: var(--text-tertiary, #9ca3af);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.source-item:hover .source-external-icon {
-  opacity: 1;
+  flex: 1;
 }
 
 .source-domain {
   font-size: 11px;
-  color: var(--text-tertiary, #9ca3af);
+  color: #00ff96;
+  font-weight: 500;
 }
 
-.source-snippet {
+[data-theme="light"] .source-domain {
+  color: #059669;
+}
+
+.source-external-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  opacity: 0.5;
+  transition: all 0.15s ease;
+}
+
+.source-item:hover .source-external-icon {
+  opacity: 1;
+  color: #00ff96;
+}
+
+[data-theme="light"] .source-item:hover .source-external-icon {
+  color: #059669;
+}
+
+/* Legacy header (non-button) */
+.sources-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
   font-size: 12px;
-  color: var(--text-secondary, #6b7280);
-  line-height: 1.4;
-  margin-top: 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
-/* Toggle button */
+/* Legacy toggle button */
 .sources-toggle {
   display: flex;
   align-items: center;
@@ -1773,7 +1856,7 @@
   margin-top: 8px;
   padding: 6px 10px;
   font-size: 12px;
-  color: var(--accent-color, #3b82f6);
+  color: #00ff96;
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -1782,7 +1865,15 @@
 }
 
 .sources-toggle:hover {
-  background: var(--bg-hover, rgba(59, 130, 246, 0.08));
+  background: rgba(0, 255, 150, 0.12);
+}
+
+[data-theme="light"] .sources-toggle {
+  color: #059669;
+}
+
+[data-theme="light"] .sources-toggle:hover {
+  background: rgba(0, 220, 130, 0.15);
 }
 
 
@@ -1803,20 +1894,31 @@
   gap: 4px;
   padding: 3px 8px;
   font-size: 11px;
-  color: var(--text-secondary, #6b7280);
-  background: var(--bg-secondary, rgba(0, 0, 0, 0.04));
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
+[data-theme="light"] .source-badge {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Dark theme hover - Emerald */
 .source-badge:hover {
-  background: var(--accent-color, #3b82f6);
+  background: #00ff96;
+  color: #0c0c0f;
+}
+
+/* Light theme hover - Emerald */
+[data-theme="light"] .source-badge:hover {
+  background: #059669;
   color: white;
 }
 
 .source-badge.more {
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-muted);
   cursor: default;
 }
 
@@ -1828,11 +1930,11 @@
 .tool-call-sources {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed var(--border-color, rgba(0, 0, 0, 0.1));
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
-[data-theme="dark"] .tool-call-sources {
-  border-top-color: rgba(255, 255, 255, 0.1);
+[data-theme="light"] .tool-call-sources {
+  border-top-color: rgba(0, 0, 0, 0.1);
 }
 
 .tool-call-sources-header {
@@ -1840,7 +1942,7 @@
   align-items: center;
   gap: 4px;
   font-size: 10px;
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-muted);
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
@@ -1852,21 +1954,33 @@
   gap: 6px;
 }
 
+/* Dark theme: Emerald Glow */
 .tool-call-source-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
   font-size: 10px;
-  color: var(--accent-color, #3b82f6);
-  background: var(--bg-secondary, rgba(59, 130, 246, 0.08));
+  color: #00ff96;
+  background: rgba(0, 255, 150, 0.12);
   border-radius: 4px;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
+/* Light theme: Vibrant Emerald */
+[data-theme="light"] .tool-call-source-item {
+  color: #059669;
+  background: rgba(0, 220, 130, 0.2);
+}
+
 .tool-call-source-item:hover {
-  background: var(--accent-color, #3b82f6);
+  background: #00ff96;
+  color: #0c0c0f;
+}
+
+[data-theme="light"] .tool-call-source-item:hover {
+  background: #059669;
   color: white;
 }
 
@@ -1878,48 +1992,78 @@
 .tool-call-sources-more {
   padding: 2px 8px;
   font-size: 10px;
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-muted);
   background: transparent;
-  border: 1px dashed var(--border-color, rgba(0, 0, 0, 0.15));
+  border: 1px dashed rgba(255, 255, 255, 0.15);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
+[data-theme="light"] .tool-call-sources-more {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
 .tool-call-sources-more:hover {
-  border-color: var(--accent-color, #3b82f6);
-  color: var(--accent-color, #3b82f6);
+  border-color: #00ff96;
+  color: #00ff96;
+}
+
+[data-theme="light"] .tool-call-sources-more:hover {
+  border-color: #059669;
+  color: #059669;
 }
 
 
 /* =============================================================================
-   Thinking Block Source Badge
+   Thinking Block Source Badge - Emerald Glow
    ============================================================================= */
 
+/* Dark theme: Emerald Glow */
 .thinking-sources-badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   margin-left: 8px;
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 10px;
-  color: var(--accent-color, #3b82f6);
-  background: var(--bg-secondary, rgba(59, 130, 246, 0.1));
+  font-weight: 500;
+  color: #00ff96;
+  background: rgba(0, 255, 150, 0.15);
   border-radius: 10px;
+}
+
+/* Light theme: Vibrant Emerald */
+[data-theme="light"] .thinking-sources-badge {
+  color: #059669;
+  background: rgba(0, 220, 130, 0.2);
 }
 
 
 /* =============================================================================
-   Web Search Query Styling (in ThinkingBlock)
+   Web Search Query Styling (in ThinkingBlock) - Emerald Glow
    ============================================================================= */
 
+/* Dark theme - Emerald Glow */
 .web-search-query {
-  background: var(--bg-secondary, rgba(59, 130, 246, 0.05));
-  border-left: 2px solid var(--accent-color, #3b82f6);
+  background: rgba(0, 255, 150, 0.12);
+  border-left: 2px solid #00ff96;
+  box-shadow: 0 0 15px rgba(0, 255, 150, 0.1);
 }
 
 .web-search-query code {
-  color: var(--accent-color, #3b82f6);
+  color: #00ff96;
+}
+
+/* Light theme - Vibrant Emerald */
+[data-theme="light"] .web-search-query {
+  background: rgba(0, 220, 130, 0.25);
+  border-left-color: #059669;
+  box-shadow: 0 0 15px rgba(0, 220, 130, 0.15);
+}
+
+[data-theme="light"] .web-search-query code {
+  color: #047857;
 }
 
 
@@ -1929,18 +2073,4 @@
 
 .message-sources {
   margin-top: 16px;
-}
-
-
-/* =============================================================================
-   Dark Theme Overrides
-   ============================================================================= */
-
-[data-theme="dark"] {
-  --bg-secondary: rgba(255, 255, 255, 0.05);
-  --bg-hover: rgba(59, 130, 246, 0.15);
-  --border-color: rgba(255, 255, 255, 0.1);
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-tertiary: #6b7280;
 }
