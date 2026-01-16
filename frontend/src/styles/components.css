@@ -1632,21 +1632,21 @@
    ============================================================================= */
 
 /* =============================================================================
-   Sources List Component - Collapsible Dropdown (like Thinking Block)
+   Sources List Component - Collapsible Dropdown (matching Thinking Block)
    ============================================================================= */
 
-/* Main container - styled like thinking block */
+/* Main container - matches thinking block style */
 .sources-list {
-  margin-top: 16px;
-  background: rgba(0, 255, 150, 0.08);
-  border: 1px solid rgba(0, 255, 150, 0.25);
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   overflow: hidden;
 }
 
 [data-theme="light"] .sources-list {
-  background: rgba(0, 220, 130, 0.12);
-  border-color: rgba(0, 180, 100, 0.35);
+  background: #f1f5f9;
+  border-color: #e2e8f0;
 }
 
 /* Collapsible Header Button - matches thinking-header style */
@@ -1661,29 +1661,21 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  color: #00ff96;
+  color: var(--text-secondary);
   font-family: var(--font-sans);
   transition: background 0.15s ease;
 }
 
 .sources-header-btn:hover {
-  background: rgba(0, 255, 150, 0.12);
-}
-
-[data-theme="light"] .sources-header-btn {
-  color: #059669;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 [data-theme="light"] .sources-header-btn:hover {
-  background: rgba(0, 220, 130, 0.18);
+  background: #e2e8f0;
 }
 
 .sources-icon {
-  color: #00ff96;
-}
-
-[data-theme="light"] .sources-icon {
-  color: #059669;
+  color: var(--text-muted);
 }
 
 .sources-title {
@@ -1695,8 +1687,8 @@
 }
 
 .sources-count {
-  background: #00ff96;
-  color: #0c0c0f;
+  background: var(--text-muted);
+  color: var(--bg-base);
   font-size: 10px;
   padding: 3px 10px;
   border-radius: 10px;
@@ -1704,25 +1696,25 @@
 }
 
 [data-theme="light"] .sources-count {
-  background: #059669;
+  background: #64748b;
   color: white;
 }
 
 /* Expandable Content Area */
 .sources-content {
-  border-top: 1px solid rgba(0, 255, 150, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 14px 18px;
 }
 
 [data-theme="light"] .sources-content {
-  border-top-color: rgba(0, 180, 100, 0.25);
+  border-top-color: #e2e8f0;
 }
 
 /* Source items container - vertical list */
 .sources-items {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* Individual source item - clean row layout */
@@ -1730,29 +1722,28 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
-  border: 1px solid rgba(0, 255, 150, 0.15);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   text-decoration: none;
   color: inherit;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .source-item:hover {
-  border-color: #00ff96;
-  background: rgba(0, 255, 150, 0.15);
-  transform: translateX(4px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 [data-theme="light"] .source-item {
-  background: rgba(255, 255, 255, 0.6);
-  border-color: rgba(0, 180, 100, 0.2);
+  background: #ffffff;
+  border-color: #e2e8f0;
 }
 
 [data-theme="light"] .source-item:hover {
-  border-color: #059669;
-  background: rgba(0, 220, 130, 0.2);
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 
 /* Favicon */
@@ -1769,7 +1760,7 @@
 }
 
 [data-theme="light"] .source-favicon {
-  background: rgba(0, 0, 0, 0.05);
+  background: #f1f5f9;
 }
 
 .source-favicon img {
@@ -1813,12 +1804,7 @@
 
 .source-domain {
   font-size: 11px;
-  color: #00ff96;
-  font-weight: 500;
-}
-
-[data-theme="light"] .source-domain {
-  color: #059669;
+  color: var(--text-muted);
 }
 
 .source-external-icon {
@@ -1830,11 +1816,6 @@
 
 .source-item:hover .source-external-icon {
   opacity: 1;
-  color: #00ff96;
-}
-
-[data-theme="light"] .source-item:hover .source-external-icon {
-  color: #059669;
 }
 
 /* Legacy header (non-button) */
@@ -1856,7 +1837,7 @@
   margin-top: 8px;
   padding: 6px 10px;
   font-size: 12px;
-  color: #00ff96;
+  color: var(--text-secondary);
   background: transparent;
   border: none;
   border-radius: 4px;
@@ -1865,15 +1846,11 @@
 }
 
 .sources-toggle:hover {
-  background: rgba(0, 255, 150, 0.12);
-}
-
-[data-theme="light"] .sources-toggle {
-  color: #059669;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme="light"] .sources-toggle:hover {
-  background: rgba(0, 220, 130, 0.15);
+  background: #e2e8f0;
 }
 
 
@@ -1954,34 +1931,33 @@
   gap: 6px;
 }
 
-/* Dark theme: Emerald Glow */
+/* Dark theme: Clean subtle style */
 .tool-call-source-item {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 2px 8px;
   font-size: 10px;
-  color: #00ff96;
-  background: rgba(0, 255, 150, 0.12);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   text-decoration: none;
   transition: all 0.15s ease;
 }
 
-/* Light theme: Vibrant Emerald */
+/* Light theme */
 [data-theme="light"] .tool-call-source-item {
-  color: #059669;
-  background: rgba(0, 220, 130, 0.2);
+  color: var(--text-secondary);
+  background: #f1f5f9;
 }
 
 .tool-call-source-item:hover {
-  background: #00ff96;
-  color: #0c0c0f;
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
 }
 
 [data-theme="light"] .tool-call-source-item:hover {
-  background: #059669;
-  color: white;
+  background: #e2e8f0;
 }
 
 .tool-call-source-item .source-domain {
@@ -2001,25 +1977,24 @@
 }
 
 [data-theme="light"] .tool-call-sources-more {
-  border-color: rgba(0, 0, 0, 0.15);
+  border-color: #e2e8f0;
 }
 
 .tool-call-sources-more:hover {
-  border-color: #00ff96;
-  color: #00ff96;
+  border-color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 [data-theme="light"] .tool-call-sources-more:hover {
-  border-color: #059669;
-  color: #059669;
+  border-color: #cbd5e1;
 }
 
 
 /* =============================================================================
-   Thinking Block Source Badge - Emerald Glow
+   Thinking Block Source Badge - Clean subtle style
    ============================================================================= */
 
-/* Dark theme: Emerald Glow */
+/* Dark theme */
 .thinking-sources-badge {
   display: inline-flex;
   align-items: center;
@@ -2028,42 +2003,40 @@
   padding: 2px 8px;
   font-size: 10px;
   font-weight: 500;
-  color: #00ff96;
-  background: rgba(0, 255, 150, 0.15);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
 }
 
-/* Light theme: Vibrant Emerald */
+/* Light theme */
 [data-theme="light"] .thinking-sources-badge {
-  color: #059669;
-  background: rgba(0, 220, 130, 0.2);
+  color: var(--text-secondary);
+  background: #e2e8f0;
 }
 
 
 /* =============================================================================
-   Web Search Query Styling (in ThinkingBlock) - Emerald Glow
+   Web Search Query Styling (in ThinkingBlock) - Clean subtle style
    ============================================================================= */
 
-/* Dark theme - Emerald Glow */
+/* Dark theme */
 .web-search-query {
-  background: rgba(0, 255, 150, 0.12);
-  border-left: 2px solid #00ff96;
-  box-shadow: 0 0 15px rgba(0, 255, 150, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  border-left: 2px solid var(--text-muted);
 }
 
 .web-search-query code {
-  color: #00ff96;
+  color: var(--text-primary);
 }
 
-/* Light theme - Vibrant Emerald */
+/* Light theme */
 [data-theme="light"] .web-search-query {
-  background: rgba(0, 220, 130, 0.25);
-  border-left-color: #059669;
-  box-shadow: 0 0 15px rgba(0, 220, 130, 0.15);
+  background: #f8fafc;
+  border-left-color: #94a3b8;
 }
 
 [data-theme="light"] .web-search-query code {
-  color: #047857;
+  color: #0f172a;
 }
 
 
