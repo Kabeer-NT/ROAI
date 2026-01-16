@@ -1,10 +1,24 @@
-import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Sun, Moon, EyeOff } from 'lucide-react'
+import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Sun, Moon, EyeOff, FileSpreadsheet } from 'lucide-react'
 import type { SpreadsheetFile } from '../types'
 import type { FileVisibilityState, SheetVisibilityState } from '../hooks/useVisibility'
 import { FileCard } from './FileCard'
 import { DropZone } from './DropZone'
 import { ModelSelector } from './ModelSelector'
 import { useAuth } from '../hooks'
+
+// Anthropic logo SVG component
+function AnthropicLogo({ size = 20 }: { size?: number }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="currentColor"
+    >
+      <path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm4.132 10.501L8.453 7.687l-2.248 6.334h4.496z" />
+    </svg>
+  )
+}
 
 interface VisibilityStats {
   filesWithHidden: number
@@ -25,10 +39,8 @@ interface SidebarProps {
   isReloading?: boolean
   theme?: 'light' | 'dark'
   onThemeToggle?: () => void
-  // NEW: Sheet-scoped visibility - keyed by filename
   getFileVisibility?: (filename: string) => FileVisibilityState
   setFileVisibility?: (filename: string, visibility: FileVisibilityState) => void
-  // DEPRECATED: Legacy visibility props
   getVisibility?: (filename: string) => SheetVisibilityState
   setVisibility?: (filename: string, visibility: SheetVisibilityState) => void
   visibilityStats?: VisibilityStats
@@ -48,36 +60,57 @@ export function Sidebar({
   isReloading,
   theme = 'dark',
   onThemeToggle,
-  // New sheet-scoped visibility
   getFileVisibility,
   setFileVisibility,
-  // Legacy visibility
   getVisibility,
   setVisibility,
   visibilityStats,
 }: SidebarProps) {
   const { user, logout } = useAuth()
   
-  // Determine which visibility system to use
   const isUsingNewSystem = !!getFileVisibility && !!setFileVisibility
-
-  console.log('isUsingNewSystem:', !!getFileVisibility && !!setFileVisibility);
-  console.log('getFileVisibility function:', getFileVisibility);  
-  console.log('setFileVisibility:', setFileVisibility);
-
   
   return (
     <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
-        <div className="logo">
-          <Hexagon className="logo-icon" size={24} />
-          {isOpen && <span className="logo-text">R-O-AI</span>}
-        </div>
+        {isOpen && (
+          <div className="logo">
+            <Hexagon className="logo-icon" size={24} />
+            <span className="logo-text">R-O-AI</span>
+          </div>
+        )}
         <button className="sidebar-toggle" onClick={onToggle}>
           {isOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
         </button>
       </div>
 
+      {/* Collapsed: Icon rail */}
+      {!isOpen && (
+        <div className="sidebar-rail">
+          <button className="rail-btn rail-user" title={user?.full_name || 'User'}>
+            <User size={20} />
+          </button>
+          
+          <button className="rail-btn rail-anthropic" title={selectedModel}>
+            <AnthropicLogo size={20} />
+          </button>
+          
+          {onThemeToggle && (
+            <button className="rail-btn rail-theme" onClick={onThemeToggle} title={`${theme === 'dark' ? 'Dark' : 'Light'} Mode`}>
+              {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+            </button>
+          )}
+          
+          <button className="rail-btn rail-files" onClick={onToggle} title={`${files.length} file${files.length !== 1 ? 's' : ''}`}>
+            <FileSpreadsheet size={20} />
+            {files.length > 0 && (
+              <span className="rail-badge">{files.length > 9 ? '9+' : files.length}</span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Expanded: Original content */}
       {isOpen && (
         <>
           <div className="sidebar-section user-section">
@@ -139,7 +172,6 @@ export function Sidebar({
 
           {files.length > 0 && (
             <div className="sidebar-section files-section">
-              {/* Visibility indicator */}
               {visibilityStats && visibilityStats.totalHiddenItems > 0 && (
                 <div className="visibility-indicator">
                   <EyeOff size={14} />
@@ -153,17 +185,11 @@ export function Sidebar({
                     key={file.id}
                     file={file}
                     onRemove={() => onFileRemove(file.id)}
-                    // Pass both new and legacy props based on what's available
-                    fileVisibility={(() => {
-                      const vis = isUsingNewSystem ? getFileVisibility!(file.filename) : undefined;
-                      console.log('FileCard receiving fileVisibility for', file.filename, ':', vis);
-                      return vis;
-                    })()}
+                    fileVisibility={isUsingNewSystem ? getFileVisibility!(file.filename) : undefined}
                     onFileVisibilityChange={isUsingNewSystem 
                       ? (v) => setFileVisibility!(file.filename, v) 
                       : undefined
                     }
-                    // Legacy props (backward compatibility)
                     visibility={!isUsingNewSystem && getVisibility ? getVisibility(file.filename) : undefined}
                     onVisibilityChange={!isUsingNewSystem && setVisibility 
                       ? (v) => setVisibility(file.filename, v) 
