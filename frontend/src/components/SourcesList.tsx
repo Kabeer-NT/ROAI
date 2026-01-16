@@ -1,28 +1,25 @@
 import { useState } from 'react'
-import { ExternalLink, Globe, ChevronDown, ChevronUp, Link2 } from 'lucide-react'
+import { ExternalLink, Globe, ChevronDown, ChevronRight, Link2 } from 'lucide-react'
 import type { WebSource } from '../types'
 
 interface SourcesListProps {
   sources: WebSource[]
   className?: string
-  maxVisible?: number
+  defaultExpanded?: boolean
 }
 
 /**
- * Displays a list of web source citations from search results.
- * Shows favicon, title, and snippet with expandable functionality.
+ * Displays a collapsible list of web source citations from search results.
+ * Clean, spacious design with favicons and external links.
  */
 export function SourcesList({ 
   sources, 
   className = '',
-  maxVisible = 3 
+  defaultExpanded = false
 }: SourcesListProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   if (!sources || sources.length === 0) return null
-
-  const visibleSources = isExpanded ? sources : sources.slice(0, maxVisible)
-  const hasMore = sources.length > maxVisible
 
   // Extract domain from URL for display
   const getDomain = (url: string): string => {
@@ -46,66 +43,54 @@ export function SourcesList({
 
   return (
     <div className={`sources-list ${className}`}>
-      <div className="sources-header">
+      {/* Collapsible Header - like thinking block */}
+      <button 
+        className="sources-header-btn"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <Link2 size={14} className="sources-icon" />
         <span className="sources-title">Sources</span>
         <span className="sources-count">{sources.length}</span>
-      </div>
+      </button>
 
-      <div className="sources-items">
-        {visibleSources.map((source, idx) => (
-          <a
-            key={`${source.url}-${idx}`}
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="source-item"
-          >
-            <div className="source-favicon">
-              <img 
-                src={getFaviconUrl(source.url)} 
-                alt=""
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                  e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                }}
-              />
-              <Globe size={14} className="source-favicon-fallback hidden" />
-            </div>
-            
-            <div className="source-content">
-              <div className="source-title-row">
-                <span className="source-title">
-                  {source.title || getDomain(source.url)}
-                </span>
-                <ExternalLink size={12} className="source-external-icon" />
-              </div>
-              <span className="source-domain">{getDomain(source.url)}</span>
-              {source.snippet && (
-                <p className="source-snippet">{source.snippet}</p>
-              )}
-            </div>
-          </a>
-        ))}
-      </div>
-
-      {hasMore && (
-        <button 
-          className="sources-toggle"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          {isExpanded ? (
-            <>
-              <ChevronUp size={14} />
-              <span>Show less</span>
-            </>
-          ) : (
-            <>
-              <ChevronDown size={14} />
-              <span>Show {sources.length - maxVisible} more</span>
-            </>
-          )}
-        </button>
+      {/* Expandable Content - shows all sources when open */}
+      {isExpanded && (
+        <div className="sources-content">
+          <div className="sources-items">
+            {sources.map((source, idx) => (
+              <a
+                key={`${source.url}-${idx}`}
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="source-item"
+              >
+                <div className="source-favicon">
+                  <img 
+                    src={getFaviconUrl(source.url)} 
+                    alt=""
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                  <Globe size={14} className="source-favicon-fallback hidden" />
+                </div>
+                
+                <div className="source-content">
+                  <div className="source-title-row">
+                    <span className="source-title">
+                      {source.title || getDomain(source.url)}
+                    </span>
+                    <ExternalLink size={12} className="source-external-icon" />
+                  </div>
+                  <span className="source-domain">{getDomain(source.url)}</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
