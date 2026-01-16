@@ -473,7 +473,7 @@
 }
 
 .model-icon {
-  color: #22c55e;
+  color: #d4a574;
   flex-shrink: 0;
 }
 
@@ -556,7 +556,7 @@
 
 .model-option:hover .model-option-icon,
 .model-option.selected .model-option-icon {
-  color: #22c55e;
+  color: #d4a574;
 }
 
 .model-option-content {
@@ -574,7 +574,7 @@
 }
 
 .model-option.selected .model-option-label {
-  color: #22c55e;
+  color: #d4a574;
 }
 
 .model-option-description {
@@ -583,7 +583,7 @@
 }
 
 .model-check {
-  color: #22c55e;
+  color: #d4a574;
   flex-shrink: 0;
 }
 
@@ -2046,4 +2046,76 @@
 
 .message-sources {
   margin-top: 16px;
+}
+/* ============================================================================
+   Sidebar Rail - Collapsed state styles
+   Replace the existing .sidebar-rail section in components.css with this
+   ============================================================================ */
+
+.sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  padding: var(--space-4) 0;
+  gap: var(--space-2);
+}
+
+/* Rail buttons - base */
+.rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.rail-btn:hover {
+  background: var(--bg-hover);
+  opacity: 0.8;
+}
+
+/* Icon colors */
+.rail-user {
+  color: var(--accent);
+}
+
+.rail-anthropic {
+  color: #d4a574;
+}
+
+.rail-theme {
+  color: #d4a574;
+}
+
+.rail-files {
+  color: #34c759;
+  position: relative;
+}
+
+/* Badge - Apple notification style */
+.rail-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #ff3b30;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }

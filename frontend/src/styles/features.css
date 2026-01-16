@@ -2523,3 +2523,227 @@
 .main.work-mode .selection-context-chip .chip-sheet {
   max-width: 80px;
 }
+/* ============================================================================
+   Collapsible Chat Panel - Work Mode
+   Add this to your features.css
+   ============================================================================ */
+
+/* Collapsed chat panel - vertical bar on the right */
+.chat-panel-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-4) var(--space-2);
+  gap: var(--space-3);
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-subtle);
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.chat-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chat-expand-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.chat-collapsed-icon {
+  color: var(--accent);
+  margin-top: var(--space-2);
+}
+
+.chat-collapsed-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.chat-collapsed-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--accent);
+  color: var(--bg-base);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  margin-top: auto;
+}
+
+/* Collapse button inside expanded chat panel */
+.chat-collapse-btn {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 10;
+}
+
+.chat-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+/* Chat panel needs relative positioning for collapse button */
+.chat-panel {
+  position: relative;
+}
+
+/* Workspace panel expands when chat is collapsed */
+.workspace-panel.expanded {
+  flex: 1;
+}
+
+/* Smooth transitions */
+.chat-panel,
+.chat-panel-collapsed,
+.workspace-panel {
+  transition: width 0.2s ease, flex 0.2s ease;
+}
+
+/* ============================================================================
+   Resizable Panel Divider - Work Mode
+   Add this to your features.css
+   ============================================================================ */
+
+/* The draggable divider between workspace and chat panels */
+.panel-divider {
+  position: relative;
+  width: 8px;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  cursor: col-resize;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  z-index: 5;
+}
+
+.panel-divider:hover {
+  background: var(--bg-hover);
+}
+
+.panel-divider:hover .divider-handle {
+  background: var(--accent);
+  opacity: 1;
+}
+
+/* Visual handle in the middle of the divider */
+.divider-handle {
+  width: 4px;
+  height: 48px;
+  background: var(--border-default);
+  border-radius: 2px;
+  opacity: 0.6;
+  transition: all 0.15s ease;
+}
+
+/* Active state when dragging */
+.panel-divider:active {
+  background: var(--bg-active);
+}
+
+.panel-divider:active .divider-handle {
+  background: var(--accent);
+  opacity: 1;
+  height: 64px;
+}
+
+/* ============================================================================
+   Updated Work Mode Styles - Replace existing .main.work-mode rules
+   ============================================================================ */
+
+/* Remove the fixed flex values since we're using inline styles now */
+.main.work-mode .workspace-panel {
+  min-width: 300px;
+  overflow: hidden;
+  transition: none; /* Disable transition during drag for smooth resize */
+}
+
+.main.work-mode .chat-panel {
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  transition: none; /* Disable transition during drag for smooth resize */
+}
+
+/* Remove the border-right since we have the divider now */
+.main.work-mode .workspace-panel {
+  border-right: none;
+}
+
+/* ============================================================================
+   Light Theme Overrides
+   ============================================================================ */
+
+[data-theme="light"] .panel-divider {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .panel-divider:hover {
+  background: #e2e8f0;
+}
+
+[data-theme="light"] .panel-divider:active {
+  background: #cbd5e1;
+}
+
+[data-theme="light"] .divider-handle {
+  background: #cbd5e1;
+}
+
+[data-theme="light"] .panel-divider:hover .divider-handle,
+[data-theme="light"] .panel-divider:active .divider-handle {
+  background: #d97706;
+}
+
+/* ============================================================================
+   Responsive - Disable resize on mobile
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .panel-divider {
+    display: none;
+  }
+  
+  .main.work-mode .workspace-panel,
+  .main.work-mode .chat-panel {
+    flex: 1 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+}
