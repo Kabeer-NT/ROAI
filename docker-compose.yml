@@ -3,12 +3,12 @@ services:
     image: postgres:16
     container_name: roai-postgres
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-roai_secure_password}
-      POSTGRES_DB: roai
     ports:
       - "5434:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: roai
     volumes:
       - roai_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,12 +26,11 @@ services:
       - "8002:8000"
     volumes:
       - ./backend:/app
-      - roai_uploads:/app/uploads
     environment:
-      DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD:-roai_secure_password}@db:5432/roai
+      DATABASE_URL: postgresql+psycopg2://postgres:password@db:5432/roai
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
-      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      CLAUDE_MODEL: claude-sonnet-4-20250514
+      SECRET_KEY: ${SECRET_KEY}
     depends_on:
       db:
         condition: service_healthy
@@ -47,10 +46,10 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
+      DOCKER: "true"
       PUBLIC_API_URL: http://localhost:8002
     depends_on:
       - backend
 
 volumes:
   roai_pgdata:
-  roai_uploads:
