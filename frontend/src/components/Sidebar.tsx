@@ -1,24 +1,10 @@
-import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Sun, Moon, EyeOff, FileSpreadsheet } from 'lucide-react'
+import { LogOut, User, RefreshCw, Hexagon, ChevronLeft, ChevronRight, Sun, Moon, EyeOff, FileSpreadsheet, ArrowLeft } from 'lucide-react'
 import type { SpreadsheetFile } from '../types'
 import type { FileVisibilityState, SheetVisibilityState } from '../hooks/useVisibility'
 import { FileCard } from './FileCard'
 import { DropZone } from './DropZone'
 import { ModelSelector } from './ModelSelector'
 import { useAuth } from '../hooks'
-
-// Anthropic logo SVG component
-function AnthropicLogo({ size = 20 }: { size?: number }) {
-  return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
-      fill="currentColor"
-    >
-      <path d="M13.827 3.52h3.603L24 20.48h-3.603l-6.57-16.96zm-7.258 0h3.767L16.906 20.48h-3.674l-1.343-3.461H5.017l-1.344 3.46H0L6.57 3.522zm4.132 10.501L8.453 7.687l-2.248 6.334h4.496z" />
-    </svg>
-  )
-}
 
 interface VisibilityStats {
   filesWithHidden: number
@@ -44,6 +30,9 @@ interface SidebarProps {
   getVisibility?: (filename: string) => SheetVisibilityState
   setVisibility?: (filename: string, visibility: SheetVisibilityState) => void
   visibilityStats?: VisibilityStats
+  // New: conversation context
+  conversationTitle?: string
+  onBackClick?: () => void
 }
 
 export function Sidebar({
@@ -65,6 +54,8 @@ export function Sidebar({
   getVisibility,
   setVisibility,
   visibilityStats,
+  conversationTitle,
+  onBackClick,
 }: SidebarProps) {
   const { user, logout } = useAuth()
   
@@ -87,12 +78,14 @@ export function Sidebar({
       {/* Collapsed: Icon rail */}
       {!isOpen && (
         <div className="sidebar-rail">
+          {onBackClick && (
+            <button className="rail-btn rail-back" onClick={onBackClick} title="Back to conversations">
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          
           <button className="rail-btn rail-user" title={user?.full_name || 'User'}>
             <User size={20} />
-          </button>
-          
-          <button className="rail-btn rail-anthropic" title={selectedModel}>
-            <AnthropicLogo size={20} />
           </button>
           
           {onThemeToggle && (
@@ -110,9 +103,28 @@ export function Sidebar({
         </div>
       )}
 
-      {/* Expanded: Original content */}
+      {/* Expanded: Full sidebar content */}
       {isOpen && (
         <>
+          {/* Back to conversations */}
+          {onBackClick && (
+            <div className="sidebar-section back-section">
+              <button className="back-btn" onClick={onBackClick}>
+                <ArrowLeft size={16} />
+                <span>All Conversations</span>
+              </button>
+            </div>
+          )}
+
+          {/* Conversation title */}
+          {conversationTitle && (
+            <div className="sidebar-section conversation-section">
+              <div className="conversation-title-display">
+                {conversationTitle}
+              </div>
+            </div>
+          )}
+
           <div className="sidebar-section user-section">
             <div className="user-info">
               <div className="user-avatar">
@@ -152,7 +164,7 @@ export function Sidebar({
 
           <div className="sidebar-section">
             <div className="section-label">
-              Data Sources
+              Files
               {files.length > 0 && <span className="count">{files.length}</span>}
               {isReloading && (
                 <RefreshCw size={12} className="reloading-icon spinning" />
