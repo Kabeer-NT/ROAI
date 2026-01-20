@@ -1873,45 +1873,49 @@
 
 .mode-toggle-bar {
   display: flex;
-  align-items: center;
   justify-content: center;
   padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  background: var(--bg-base);
 }
 
 .mode-toggle {
   display: flex;
+  align-items: center;
   background: var(--bg-elevated);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 4px;
-  gap: 4px;
+  gap: 0;
 }
 
 .mode-toggle .mode-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  border: none;
+  padding: var(--space-2) var(--space-5);
   background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
-  font-size: 13px;
-  font-weight: 500;
   font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s ease;
 }
 
-.mode-toggle .mode-btn:hover {
+.mode-toggle .mode-btn svg {
+  display: none;
+}
+
+.mode-toggle .mode-btn:hover:not(.active) {
   color: var(--text-secondary);
-  background: var(--bg-hover);
 }
 
 .mode-toggle .mode-btn.active {
-  background: var(--accent);
-  color: var(--bg-base);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================================================
@@ -1941,16 +1945,13 @@
 }
 
 .main.work-mode .workspace-panel {
-  flex: 1 1 60%;
-  min-width: 400px;
-  border-right: 1px solid var(--border-subtle);
+  min-width: 300px;
   overflow: hidden;
+  border-right: none;
 }
 
 .main.work-mode .chat-panel {
-  flex: 1 1 40%;
-  min-width: 320px;
-  max-width: 520px;
+  min-width: 280px;
   display: flex;
   flex-direction: column;
 }
@@ -2277,12 +2278,21 @@
    ============================================================================ */
 
 [data-theme="light"] .mode-toggle {
-  background: #f1f5f9;
+  background: #e2e8f0;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn {
+  color: #64748b;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn:hover:not(.active) {
+  color: #475569;
 }
 
 [data-theme="light"] .mode-toggle .mode-btn.active {
-  background: #d97706;
-  color: white;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 [data-theme="light"] .file-selector-btn {
@@ -2633,13 +2643,10 @@
 .workspace-panel {
   transition: width 0.2s ease, flex 0.2s ease;
 }
-
 /* ============================================================================
    Resizable Panel Divider - Work Mode
-   Add this to your features.css
    ============================================================================ */
 
-/* The draggable divider between workspace and chat panels */
 .panel-divider {
   position: relative;
   width: 8px;
@@ -2662,7 +2669,6 @@
   opacity: 1;
 }
 
-/* Visual handle in the middle of the divider */
 .divider-handle {
   width: 4px;
   height: 48px;
@@ -2672,7 +2678,6 @@
   transition: all 0.15s ease;
 }
 
-/* Active state when dragging */
 .panel-divider:active {
   background: var(--bg-active);
 }
@@ -2683,33 +2688,7 @@
   height: 64px;
 }
 
-/* ============================================================================
-   Updated Work Mode Styles - Replace existing .main.work-mode rules
-   ============================================================================ */
-
-/* Remove the fixed flex values since we're using inline styles now */
-.main.work-mode .workspace-panel {
-  min-width: 300px;
-  overflow: hidden;
-  transition: none; /* Disable transition during drag for smooth resize */
-}
-
-.main.work-mode .chat-panel {
-  min-width: 280px;
-  display: flex;
-  flex-direction: column;
-  transition: none; /* Disable transition during drag for smooth resize */
-}
-
-/* Remove the border-right since we have the divider now */
-.main.work-mode .workspace-panel {
-  border-right: none;
-}
-
-/* ============================================================================
-   Light Theme Overrides
-   ============================================================================ */
-
+/* Light Theme */
 [data-theme="light"] .panel-divider {
   background: #f1f5f9;
 }
@@ -2731,19 +2710,9 @@
   background: #d97706;
 }
 
-/* ============================================================================
-   Responsive - Disable resize on mobile
-   ============================================================================ */
-
+/* Disable resize on mobile */
 @media (max-width: 768px) {
   .panel-divider {
     display: none;
-  }
-  
-  .main.work-mode .workspace-panel,
-  .main.work-mode .chat-panel {
-    flex: 1 !important;
-    max-width: none !important;
-    min-width: 0 !important;
   }
 }
