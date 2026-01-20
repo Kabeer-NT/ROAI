@@ -26,9 +26,14 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting up optimized services...")
     
     # Import services here to avoid circular imports
-    from app.services import claude as claude
-    from app.services import suggestions as suggestions
-    from app.services import spreadsheet as spreadsheet
+    from app.services import claude
+    from app.services import suggestions
+    from app.services import spreadsheet
+    from app.services.db import create_tables
+    
+    # Ensure database tables exist
+    create_tables()
+    print("   ✓ Database tables ready")
     
     # Pre-warm HTTP clients
     await claude.startup()
@@ -79,7 +84,7 @@ async def _periodic_cleanup():
     Periodically clean up expired workbook caches.
     Runs every 60 seconds.
     """
-    from app.services import spreadsheet_optimized as spreadsheet
+    from app.services import spreadsheet
     
     while True:
         try:
@@ -100,8 +105,8 @@ def get_health_stats() -> dict:
     Get health statistics for monitoring.
     Can be exposed via a /health endpoint.
     """
-    from app.services import spreadsheet_optimized as spreadsheet
-    from app.services import suggestions_optimized as suggestions
+    from app.services import spreadsheet
+    from app.services import suggestions
     
     return {
         "status": "healthy",
