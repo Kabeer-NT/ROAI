@@ -24,6 +24,11 @@ def create_tables():
     Base.metadata.create_all(bind=engine)
 
 
+def drop_tables():
+    """Drop all tables (use with caution!)."""
+    Base.metadata.drop_all(bind=engine)
+
+
 def get_db() -> Generator[Session, None, None]:
     """Dependency that provides a database session."""
     db = SessionLocal()
