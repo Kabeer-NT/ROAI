@@ -2,6 +2,7 @@
 Spreadsheet Routes (Protected)
 ==============================
 Files are stored persistently in the database and can be associated with conversations.
+CONVERSATION-SCOPED: Only loads files to memory if conversation is active.
 """
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
@@ -28,6 +29,9 @@ from app.services.spreadsheet import (
     restore_file_from_bytes,
 )
 from app.models import User, Spreadsheet, Conversation, ConversationFile
+
+# Import conversation tracking from chat routes
+from app.routes.chat import get_current_loaded_conversation
 
 router = APIRouter(tags=["spreadsheet"])
 
@@ -69,7 +73,7 @@ class FriendlyError(BaseModel):
 
 
 # =============================================================================
-# UPLOAD - Now stores bytes in database
+# UPLOAD - Conversation-aware context loading
 # =============================================================================
 
 @router.post("/upload", response_model=UploadResponse)
@@ -80,8 +84,10 @@ async def upload_spreadsheet(
     db: Session = Depends(get_db)
 ):
     """
-    Upload a spreadsheet. File is stored in database for persistence
-    and loaded into memory for analysis.
+    Upload a spreadsheet. File is stored in database for persistence.
+    
+    IMPORTANT: File is only loaded into memory if it belongs to the 
+    currently active conversation (for context isolation).
     """
     filename = file.filename or "uploaded_file"
     
@@ -118,8 +124,16 @@ async def upload_spreadsheet(
                 column_names=df.columns.tolist()
             ))
         
-        # Store in memory for immediate use
-        add_file_to_context(file_id, filename, contents, sheets)
+        # Check if this conversation is the currently active one
+        current_active_conv = get_current_loaded_conversation(current_user.id)
+        should_load_to_memory = (
+            conversation_id is not None and 
+            conversation_id == current_active_conv
+        )
+        
+        # Only load to memory if this is the active conversation
+        if should_load_to_memory:
+            add_file_to_context(file_id, filename, contents, sheets)
         
         # Persist to database with raw bytes
         spreadsheet_record = Spreadsheet(

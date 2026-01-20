@@ -5,6 +5,7 @@ Features:
 - Auto-creates conversation if none provided
 - Saves all messages to database
 - Loads conversation files into memory on demand
+- CONVERSATION-SCOPED CONTEXT: Clears context when switching conversations
 - Follow-up suggestions and web sources
 - Selection context for focused cell analysis
 """
@@ -26,12 +27,36 @@ from app.services.spreadsheet import (
     friendly_error_response,
     restore_file_from_bytes,
     is_file_loaded,
+    clear_context,  # ADD THIS IMPORT
 )
 from app.services.suggestions import generate_followups
 from app.services.prompts import get_friendly_error
 from app.models import User, Conversation, Message, ConversationFile, Spreadsheet
 
 router = APIRouter(tags=["chat"])
+
+
+# =============================================================================
+# TRACK CURRENT CONVERSATION FOR CONTEXT ISOLATION
+# =============================================================================
+
+# Track which conversation's files are currently loaded
+_current_conversation_id: dict[int, int] = {}  # user_id -> conversation_id
+
+
+def get_current_loaded_conversation(user_id: int) -> Optional[int]:
+    """Get the conversation ID whose files are currently in memory for this user."""
+    return _current_conversation_id.get(user_id)
+
+
+def set_current_loaded_conversation(user_id: int, conversation_id: int):
+    """Track which conversation's files are loaded for this user."""
+    _current_conversation_id[user_id] = conversation_id
+
+
+def clear_current_loaded_conversation(user_id: int):
+    """Clear tracking when context is cleared."""
+    _current_conversation_id.pop(user_id, None)
 
 
 # =============================================================================
@@ -64,7 +89,6 @@ class ChatRequest(BaseModel):
     visibility: Optional[dict[str, dict[str, dict]]] = None
     include_followups: bool = True
     selection_context: Optional[SelectionContext] = None
-    # NEW: Auto-create conversation if not provided
     auto_create_conversation: bool = True
 
 
@@ -100,47 +124,91 @@ class ChatResponse(BaseModel):
 
 
 # =============================================================================
-# HELPER: Load conversation files into memory
+# HELPER: Load conversation files into memory (WITH ISOLATION)
 # =============================================================================
 
-def load_conversation_files(conv: Conversation, db: Session) -> list[dict]:
-    """Load all files associated with a conversation into memory."""
+def load_conversation_files(
+    conv: Conversation, 
+    db: Session, 
+    user_id: int,
+    force_reload: bool = False
+) -> list[dict]:
+    """
+    Load all files associated with a conversation into memory.
+    
+    IMPORTANT: This clears any previously loaded files first to ensure
+    conversation isolation. Each conversation has its own context.
+    """
     loaded = []
     
-    for cf in conv.conversation_files:
-        ss = cf.spreadsheet
+    # Check if we're switching conversations
+    current_conv_id = get_current_loaded_conversation(user_id)
+    
+    if current_conv_id != conv.id or force_reload:
+        # CLEAR EXISTING CONTEXT - this is the key fix!
+        clear_context()
+        clear_current_loaded_conversation(user_id)
         
-        # Skip if already loaded
-        if is_file_loaded(ss.file_id):
-            loaded.append({
-                "file_id": ss.file_id,
-                "filename": ss.filename,
-                "status": "already_loaded"
-            })
-            continue
-        
-        # Restore from database
-        if ss.file_data:
-            try:
-                restore_file_from_bytes(ss.file_id, ss.filename, ss.file_data, ss.sheet_info)
+        # Now load only this conversation's files
+        for cf in conv.conversation_files:
+            ss = cf.spreadsheet
+            
+            if ss.file_data:
+                try:
+                    restore_file_from_bytes(ss.file_id, ss.filename, ss.file_data, ss.sheet_info)
+                    loaded.append({
+                        "file_id": ss.file_id,
+                        "filename": ss.filename,
+                        "status": "loaded"
+                    })
+                except Exception as e:
+                    loaded.append({
+                        "file_id": ss.file_id,
+                        "filename": ss.filename,
+                        "status": "error",
+                        "error": str(e)
+                    })
+            else:
                 loaded.append({
                     "file_id": ss.file_id,
                     "filename": ss.filename,
-                    "status": "restored"
+                    "status": "no_data"
                 })
-            except Exception as e:
+        
+        # Track that this conversation's files are now loaded
+        set_current_loaded_conversation(user_id, conv.id)
+    else:
+        # Same conversation - just verify files are still loaded
+        for cf in conv.conversation_files:
+            ss = cf.spreadsheet
+            
+            if is_file_loaded(ss.file_id):
                 loaded.append({
                     "file_id": ss.file_id,
                     "filename": ss.filename,
-                    "status": "error",
-                    "error": str(e)
+                    "status": "already_loaded"
                 })
-        else:
-            loaded.append({
-                "file_id": ss.file_id,
-                "filename": ss.filename,
-                "status": "no_data"
-            })
+            elif ss.file_data:
+                try:
+                    restore_file_from_bytes(ss.file_id, ss.filename, ss.file_data, ss.sheet_info)
+                    loaded.append({
+                        "file_id": ss.file_id,
+                        "filename": ss.filename,
+                        "status": "restored"
+                    })
+                except Exception as e:
+                    loaded.append({
+                        "file_id": ss.file_id,
+                        "filename": ss.filename,
+                        "status": "error",
+                        "error": str(e)
+                    })
+            else:
+                loaded.append({
+                    "file_id": ss.file_id,
+                    "filename": ss.filename,
+                    "status": "no_data"
+                })
     
     return loaded
 
@@ -183,12 +251,11 @@ async def chat_endpoint(
             if not conv:
                 raise HTTPException(status_code=404, detail="Conversation not found")
             
-            # Load conversation files into memory
-            load_conversation_files(conv, db)
+            # Load conversation files into memory (with isolation!)
+            load_conversation_files(conv, db, current_user.id)
             
         elif request.auto_create_conversation:
             # Auto-create a new conversation
-            # Generate title from first message
             title = user_question[:50] + "..." if len(user_question) > 50 else user_question
             title = title or "New Conversation"
             
@@ -200,6 +267,10 @@ async def chat_endpoint(
             db.add(conv)
             db.flush()
             conversation_id = conv.id
+            
+            # Clear context for new conversation
+            clear_context()
+            set_current_loaded_conversation(current_user.id, conv.id)
         
         # Merge visibility: use request visibility, falling back to conversation visibility
         visibility = request.visibility
@@ -373,6 +444,8 @@ async def load_conversation(
     """
     Load a conversation's files into memory.
     Call this when switching to a conversation.
+    
+    This CLEARS any previously loaded files to ensure conversation isolation.
     """
     conv = db.query(Conversation).filter(
         Conversation.id == conversation_id,
@@ -382,12 +455,29 @@ async def load_conversation(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     
-    loaded = load_conversation_files(conv, db)
+    # Load with isolation (clears previous conversation's files)
+    loaded = load_conversation_files(conv, db, current_user.id)
     
     return {
         "conversation_id": conversation_id,
-        "files_loaded": loaded
+        "files_loaded": loaded,
+        "context_cleared": True  # Indicate that previous context was cleared
     }
+
+
+# =============================================================================
+# CLEAR CONTEXT ENDPOINT (for debugging/manual reset)
+# =============================================================================
+
+@router.post("/chat/clear-context")
+async def clear_chat_context(
+    current_user: User = Depends(get_current_user),
+):
+    """Manually clear all loaded spreadsheet context."""
+    clear_context()
+    clear_current_loaded_conversation(current_user.id)
+    
+    return {"status": "cleared"}
 
 
 # =============================================================================
