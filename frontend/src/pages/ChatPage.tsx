@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { MessageSquare, LayoutGrid, ChevronLeft, ChevronRight, Hexagon } from 'lucide-react'
 import {
   Sidebar,
@@ -10,55 +10,61 @@ import {
   useToast,
   WorkspacePanel,
 } from '../components'
-import type { SelectionRange } from '../types'
+import { ConversationList } from '../components/ConversationList'
+import type { SelectionRange, Message, SpreadsheetFile, ToolCall, WebSource } from '../types'
 import {
   useModels,
   useSpreadsheets,
-  useChat,
   useFileHandle,
   useTheme,
   useVisibility,
+  useAuth,
 } from '../hooks'
+import { useConversations } from '../hooks/useConversations'
 
 type ViewMode = 'reference' | 'work'
 
 export function ChatPage() {
-  // Theme
+  const { token } = useAuth()
   const { theme, toggleTheme } = useTheme()
   
-  // View mode (reference = chat only, work = split view)
+  // View mode
   const [viewMode, setViewMode] = useState<ViewMode>('reference')
-  
-  // Chat panel collapsed state (only applies in work mode)
   const [chatCollapsed, setChatCollapsed] = useState(false)
-  
-  // Active file for work mode (which file to show in the workspace)
   const [activeFileId, setActiveFileId] = useState<string | null>(null)
-  
-  // Selection context for chat (when user selects cells and clicks "Ask R-O-AI")
   const [selectionContext, setSelectionContext] = useState<SelectionRange | null>(null)
-  
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(true)
   
-  // Resizable divider state - workspace width percentage (0-100)
+  // Resizable divider
   const [workspaceWidth, setWorkspaceWidth] = useState(60)
   const isDragging = useRef(false)
   const contentAreaRef = useRef<HTMLDivElement>(null)
   
-  // Model selection
+  // Models
   const { models, selectedModel, setSelectedModel } = useModels()
   
-  // Spreadsheets
+  // Conversations
   const {
-    files,
+    conversations,
+    activeConversation,
+    isLoading: conversationsLoading,
+    loadConversation,
+    updateConversation,
+    deleteConversation,
+    addFileToConversation,
+    clearActive,
+  } = useConversations()
+  
+  // Files (global user files)
+  const {
+    files: globalFiles,
     isUploading,
     uploadFile,
     reuploadFile,
     removeFile,
   } = useSpreadsheets()
   
-  // Visibility controls
+  // Visibility - now per-conversation
   const {
     getFileVisibility,
     setFileVisibility,
@@ -67,14 +73,7 @@ export function ChatPage() {
     stats: visibilityStats,
   } = useVisibility()
   
-  // Chat with visibility support
-  const { messages, isLoading, sendMessage: sendChatMessage } = useChat(
-    selectedModel,
-    files,
-    { getAllSerializedVisibility }
-  )
-  
-  // File handles for auto-reload
+  // File handles
   const {
     isSupported: fileSystemSupported,
     isReloading,
@@ -93,35 +92,70 @@ export function ChatPage() {
     },
   })
   
-  // Toast notifications
   const { toasts, addToast, dismissToast } = useToast()
-  
-  // Track file handle mappings
   const fileHandleMap = useRef<Map<string, string>>(new Map())
-  
-  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  
-  // State for suggestions
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // ============================================================================
+  // OPTIMISTIC UI: Pending message that shows immediately before backend responds
+  // ============================================================================
+  const [pendingUserMessage, setPendingUserMessage] = useState<Message | null>(null)
+  
+  // Convert conversation messages to UI messages
+  const conversationMessages: Message[] = useMemo(() => {
+    if (!activeConversation) return []
+    
+    return activeConversation.messages.map(m => ({
+      id: m.id.toString(),
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      timestamp: new Date(m.created_at),
+      toolCalls: m.tool_calls as ToolCall[] | undefined,
+      sources: m.sources as WebSource[] | undefined,
+      followups: m.followups?.map(f => ({ text: f, type: 'followup' as const })),
+    }))
+  }, [activeConversation])
+  
+  // Combine conversation messages with pending message for display
+  const messages: Message[] = useMemo(() => {
+    if (pendingUserMessage) {
+      return [...conversationMessages, pendingUserMessage]
+    }
+    return conversationMessages
+  }, [conversationMessages, pendingUserMessage])
+  
+  // Files for this conversation (or global if no conversation)
+  const conversationFiles: SpreadsheetFile[] = useMemo(() => {
+    if (activeConversation?.files) {
+      return activeConversation.files.map(f => ({
+        id: f.file_id,
+        filename: f.filename,
+        sheets: [], // Will be populated from global files
+        uploadedAt: new Date(f.added_at),
+      }))
+    }
+    return globalFiles
+  }, [activeConversation, globalFiles])
   
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
   
-  // Show suggestions when files are uploaded
+  // Show suggestions
   useEffect(() => {
-    if (files.length > 0 && !showSuggestions) {
+    if (conversationFiles.length > 0 && !showSuggestions && messages.length === 0) {
       const timer = setTimeout(() => setShowSuggestions(true), 500)
       return () => clearTimeout(timer)
     }
-    if (files.length === 0) {
+    if (conversationFiles.length === 0) {
       setShowSuggestions(false)
     }
-  }, [files.length, showSuggestions])
+  }, [conversationFiles.length, showSuggestions, messages.length])
   
-  // Auto-expand chat when user clicks "Ask R-O-AI"
+  // Auto-expand chat when selection context set
   useEffect(() => {
     if (selectionContext && chatCollapsed) {
       setChatCollapsed(false)
@@ -139,13 +173,9 @@ export function ChatPage() {
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !contentAreaRef.current) return
-      
       const rect = contentAreaRef.current.getBoundingClientRect()
       const newWidth = ((e.clientX - rect.left) / rect.width) * 100
-      
-      // Clamp between 30% and 80%
-      const clampedWidth = Math.min(80, Math.max(30, newWidth))
-      setWorkspaceWidth(clampedWidth)
+      setWorkspaceWidth(Math.min(80, Math.max(30, newWidth)))
     }
     
     const handleMouseUp = () => {
@@ -158,14 +188,88 @@ export function ChatPage() {
     
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-    
     return () => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
   }, [])
   
-  // File picker with File System Access API
+  // Send message with OPTIMISTIC UI
+  const sendMessage = useCallback(async (content: string, selContext?: SelectionRange) => {
+    if (!content.trim() || isLoading || !token) return
+    
+    // ========================================================================
+    // OPTIMISTIC UI: Show user message immediately
+    // ========================================================================
+    const optimisticUserMessage: Message = {
+      id: `pending-${Date.now()}`,
+      role: 'user',
+      content: content.trim(),
+      timestamp: new Date(),
+    }
+    setPendingUserMessage(optimisticUserMessage)
+    setIsLoading(true)
+    
+    try {
+      // Build request
+      const visibility = getAllSerializedVisibility()
+      const hasVisibility = visibility && Object.keys(visibility).length > 0
+      
+      const selection_context = selContext ? {
+        sheetName: selContext.sheetName,
+        startCell: selContext.startCell,
+        endCell: selContext.endCell,
+        cells: selContext.cells,
+        rangeString: selContext.rangeString,
+      } : undefined
+      
+      const requestBody = {
+        messages: [
+          ...conversationMessages.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: content.trim() }
+        ],
+        model: selectedModel,
+        conversation_id: activeConversation?.id || null,
+        include_followups: true,
+        auto_create_conversation: !activeConversation, // Auto-create if no active conversation
+        ...(hasVisibility && { visibility }),
+        ...(selection_context && { selection_context }),
+      }
+      
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody),
+      })
+      
+      const data = await res.json()
+      
+      // Clear pending message before loading conversation (it will come from server)
+      setPendingUserMessage(null)
+      
+      // If a new conversation was created, load it
+      if (data.conversation_id && !activeConversation) {
+        await loadConversation(data.conversation_id)
+      } else if (activeConversation) {
+        // Reload to get updated messages
+        await loadConversation(activeConversation.id)
+      }
+      
+    } catch (error) {
+      console.error('Chat error:', error)
+      addToast('Failed to send message', 'error')
+      // Clear pending message on error
+      setPendingUserMessage(null)
+    } finally {
+      setIsLoading(false)
+      setSelectionContext(null)
+    }
+  }, [token, conversationMessages, selectedModel, activeConversation, getAllSerializedVisibility, loadConversation, addToast, isLoading])
+  
+  // File handlers
   const handleFilePickerOpen = useCallback(async () => {
     if (!fileSystemSupported) return false
     
@@ -180,44 +284,64 @@ export function ChatPage() {
           continue
         }
         
-        const uploaded = await uploadFile(file)
-        if (uploaded) {
-          const handleId = `handle-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          storeHandle(handleId, handle, file.name, file.lastModified)
-          fileHandleMap.current.set(uploaded.id, handleId)
-          addToast(`✅ Loaded ${uploaded.filename}`, 'success')
-        } else {
+        // Upload with conversation_id if we have one
+        const url = activeConversation 
+          ? `/api/upload?conversation_id=${activeConversation.id}`
+          : '/api/upload'
+        
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData,
+        })
+        
+        if (!res.ok) {
           addToast(`❌ Failed to upload ${file.name}`, 'error')
+          continue
+        }
+        
+        const data = await res.json()
+        const handleId = `handle-${Date.now()}-${Math.random().toString(36).slice(2)}`
+        storeHandle(handleId, handle, file.name, file.lastModified)
+        fileHandleMap.current.set(data.file_id, handleId)
+        addToast(`✅ Loaded ${data.filename}`, 'success')
+        
+        // Reload conversation to get updated files
+        if (activeConversation) {
+          await loadConversation(activeConversation.id)
         }
       }
+      
       return true
     } catch (err) {
-      console.error('File picker error:', err)
+      if ((err as Error).name !== 'AbortError') {
+        console.error('File picker error:', err)
+      }
       return false
     }
-  }, [fileSystemSupported, openMultipleFiles, uploadFile, storeHandle, addToast])
+  }, [fileSystemSupported, openMultipleFiles, token, activeConversation, storeHandle, addToast, loadConversation])
   
-  // Fallback file handler
   const handleFilesAdd = useCallback(async (fileList: FileList) => {
     for (const file of Array.from(fileList)) {
-      const validExtensions = ['.xlsx', '.xls', '.csv', '.tsv']
-      if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
-        addToast(`❌ ${file.name} is not supported`, 'error')
-        continue
-      }
-      
-      const uploaded = await uploadFile(file)
-      if (uploaded) {
-        addToast(`✅ Loaded ${uploaded.filename}`, 'success')
+      const result = await uploadFile(file)
+      if (result) {
+        addToast(`📊 ${file.name} loaded`, 'success')
+        
+        // If we have an active conversation, add the file to it
+        if (activeConversation) {
+          await addFileToConversation(activeConversation.id, result.id)
+        }
       } else {
         addToast(`❌ Failed to upload ${file.name}`, 'error')
       }
     }
-  }, [uploadFile, addToast])
+  }, [uploadFile, addToast, activeConversation, addFileToConversation])
   
-  // File removal
   const handleFileRemove = useCallback((id: string) => {
-    const file = files.find(f => f.id === id)
+    const file = globalFiles.find(f => f.id === id)
     const handleId = fileHandleMap.current.get(id)
     if (handleId) {
       removeHandle(handleId)
@@ -227,87 +351,110 @@ export function ChatPage() {
       clearVisibility(file.filename)
     }
     removeFile(id)
-  }, [files, removeFile, removeHandle, clearVisibility])
+  }, [globalFiles, removeFile, removeHandle, clearVisibility])
+  
+  // Conversation handlers
+  const handleNewConversation = useCallback(() => {
+    clearActive()
+    setPendingUserMessage(null) // Clear any pending message
+    setShowSuggestions(true)
+  }, [clearActive])
+  
+  const handleSelectConversation = useCallback(async (id: number) => {
+    setPendingUserMessage(null) // Clear any pending message when switching
+    await loadConversation(id)
+  }, [loadConversation])
+  
+  const handleDeleteConversation = useCallback(async (id: number) => {
+    await deleteConversation(id)
+  }, [deleteConversation])
+  
+  const handleRenameConversation = useCallback(async (id: number, title: string) => {
+    await updateConversation(id, { title })
+  }, [updateConversation])
   
   // Click handlers
   const handleHintClick = useCallback((hint: string) => {
-    sendChatMessage(hint)
+    sendMessage(hint)
     setShowSuggestions(false)
-  }, [sendChatMessage])
+  }, [sendMessage])
   
   const handleFollowupClick = useCallback((text: string) => {
-    sendChatMessage(text)
-  }, [sendChatMessage])
+    sendMessage(text)
+  }, [sendMessage])
   
-  // Handle "Ask R-O-AI" from cell selection - just set the context, don't auto-send
   const handleAskAI = useCallback((selection: SelectionRange) => {
     setSelectionContext(selection)
-    // Chat will auto-expand via useEffect above
   }, [])
   
-  // Clear selection context
   const handleClearSelection = useCallback(() => {
     setSelectionContext(null)
   }, [])
   
-  // Send message with optional selection context
   const handleSendMessage = useCallback((message: string, context?: SelectionRange) => {
-    // If we have selection context, prepend it to the message for Claude
-    if (context) {
-      const contextPrefix = `[Context: Looking at cells ${context.rangeString} on sheet "${context.sheetName}"]\n\n`
-      sendChatMessage(contextPrefix + message)
-    } else {
-      sendChatMessage(message)
-    }
-    // Clear selection after sending
-    setSelectionContext(null)
-  }, [sendChatMessage])
+    sendMessage(message, context)
+  }, [sendMessage])
   
   // Derived state
   const hasMessages = messages.length > 0
-  const hasFiles = files.length > 0
+  const hasFiles = conversationFiles.length > 0
   
-  // Auto-select first file for work mode when files change
+  // Auto-select first file
   useEffect(() => {
-    if (files.length > 0 && !activeFileId) {
-      setActiveFileId(files[0].id)
-    } else if (files.length === 0) {
+    if (conversationFiles.length > 0 && !activeFileId) {
+      setActiveFileId(conversationFiles[0].id)
+    } else if (conversationFiles.length === 0) {
       setActiveFileId(null)
-    } else if (activeFileId && !files.find(f => f.id === activeFileId)) {
-      // Active file was removed, select another
-      setActiveFileId(files[0]?.id || null)
+    } else if (activeFileId && !conversationFiles.find(f => f.id === activeFileId)) {
+      setActiveFileId(conversationFiles[0]?.id || null)
     }
-  }, [files, activeFileId])
+  }, [conversationFiles, activeFileId])
   
-  // Get the active file object
-  const activeFile = files.find(f => f.id === activeFileId) || null
-
-  // Determine if chat should show collapsed state
+  const activeFile = globalFiles.find(f => f.id === activeFileId) || null
   const showCollapsedChat = viewMode === 'work' && chatCollapsed
 
   return (
     <div className="app" data-theme={theme}>
-      <Sidebar
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        files={files}
-        onFileRemove={handleFileRemove}
-        onFilesAdd={handleFilesAdd}
-        onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
-        isUploading={isUploading}
-        isReloading={isReloading}
-        theme={theme}
-        onThemeToggle={toggleTheme}
-        getFileVisibility={getFileVisibility}
-        setFileVisibility={setFileVisibility}
-        visibilityStats={visibilityStats}
-      />
+      {/* Sidebar with Conversation List */}
+      <div className={`sidebar-wrapper ${sidebarOpen ? 'open' : 'closed'}`}>
+        <Sidebar
+          isOpen={sidebarOpen}
+          onToggle={() => setSidebarOpen(!sidebarOpen)}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          files={globalFiles}
+          onFileRemove={handleFileRemove}
+          onFilesAdd={handleFilesAdd}
+          onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
+          isUploading={isUploading}
+          isReloading={isReloading}
+          theme={theme}
+          onThemeToggle={toggleTheme}
+          getFileVisibility={getFileVisibility}
+          setFileVisibility={setFileVisibility}
+          visibilityStats={visibilityStats}
+        />
+        
+        {/* Conversation List - Rendered separately below Sidebar content */}
+        {sidebarOpen && (
+          <div className="sidebar-conversations">
+            <div className="section-label">Conversations</div>
+            <ConversationList
+              conversations={conversations}
+              activeId={activeConversation?.id || null}
+              onSelect={handleSelectConversation}
+              onNew={handleNewConversation}
+              onDelete={handleDeleteConversation}
+              onRename={handleRenameConversation}
+              isLoading={conversationsLoading}
+            />
+          </div>
+        )}
+      </div>
       
       <main className={`main ${viewMode === 'work' ? 'work-mode' : 'reference-mode'}`}>
-        {/* Mode Toggle - only show when files are loaded */}
+        {/* Mode Toggle */}
         {hasFiles && (
           <div className="mode-toggle-bar">
             <div className="mode-toggle">
@@ -316,22 +463,30 @@ export function ChatPage() {
                 onClick={() => setViewMode('reference')}
               >
                 <MessageSquare size={16} />
-                <span>Reference</span>
+                <span>Chat</span>
               </button>
               <button
                 className={`mode-btn ${viewMode === 'work' ? 'active' : ''}`}
                 onClick={() => setViewMode('work')}
               >
                 <LayoutGrid size={16} />
-                <span>Work</span>
+                <span>Cowork</span>
               </button>
             </div>
+            
+            {/* Conversation indicator */}
+            {activeConversation && (
+              <div className="conversation-indicator">
+                <span className="conversation-title-badge">
+                  {activeConversation.title}
+                </span>
+              </div>
+            )}
           </div>
         )}
         
-        {/* Main Content Area */}
+        {/* Main Content */}
         <div className="content-area" ref={contentAreaRef}>
-          {/* Workspace Panel - only in work mode with files */}
           {viewMode === 'work' && activeFile && (
             <>
               <div 
@@ -343,7 +498,7 @@ export function ChatPage() {
               >
                 <WorkspacePanel
                   file={activeFile}
-                  files={files}
+                  files={globalFiles}
                   onFileSelect={setActiveFileId}
                   fileVisibility={getFileVisibility(activeFile.filename)}
                   onFileVisibilityChange={(vis) => setFileVisibility(activeFile.filename, vis)}
@@ -351,26 +506,17 @@ export function ChatPage() {
                 />
               </div>
               
-              {/* Resizable Divider - only show when chat is not collapsed */}
               {!showCollapsedChat && (
-                <div 
-                  className="panel-divider"
-                  onMouseDown={handleDividerMouseDown}
-                >
+                <div className="panel-divider" onMouseDown={handleDividerMouseDown}>
                   <div className="divider-handle" />
                 </div>
               )}
             </>
           )}
           
-          {/* Chat Panel - Collapsible in work mode */}
           {showCollapsedChat ? (
             <div className="chat-panel-collapsed">
-              <button 
-                className="chat-expand-btn"
-                onClick={() => setChatCollapsed(false)}
-                title="Expand chat"
-              >
+              <button className="chat-expand-btn" onClick={() => setChatCollapsed(false)}>
                 <ChevronLeft size={18} />
               </button>
               <div className="chat-collapsed-icon">
@@ -390,13 +536,8 @@ export function ChatPage() {
                 minWidth: '280px'
               } : undefined}
             >
-              {/* Collapse button - only in work mode */}
               {viewMode === 'work' && (
-                <button 
-                  className="chat-collapse-btn"
-                  onClick={() => setChatCollapsed(true)}
-                  title="Collapse chat"
-                >
+                <button className="chat-collapse-btn" onClick={() => setChatCollapsed(true)}>
                   <ChevronRight size={18} />
                 </button>
               )}

@@ -2119,3 +2119,644 @@
   justify-content: center;
   line-height: 1;
 }
+
+/* =============================================================================
+   Conversation List Styles
+   ============================================================================= */
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conversation-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.conversation-new-btn:hover {
+  background: var(--accent-primary-hover);
+}
+
+.conversation-new-btn:active {
+  transform: scale(0.98);
+}
+
+.conversation-new-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.conversation-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.conversation-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.conversation-empty .empty-icon {
+  opacity: 0.4;
+  margin-bottom: 8px;
+}
+
+.conversation-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.conversation-empty .empty-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+/* Conversation Item */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.conversation-item:hover {
+  background: var(--bg-hover);
+}
+
+.conversation-item.active {
+  background: var(--bg-active);
+}
+
+.conversation-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+.conversation-item.active .conversation-icon {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.conversation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.conversation-files {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Actions Menu */
+.conversation-actions {
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.conversation-item:hover .conversation-actions {
+  opacity: 1;
+}
+
+.conversation-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.conversation-menu-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.conversation-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  min-width: 120px;
+  padding: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.conversation-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.conversation-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.conversation-menu button.danger {
+  color: var(--error-color);
+}
+
+.conversation-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Edit Mode */
+.conversation-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.conversation-edit-input {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.conversation-edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.edit-btn.save {
+  color: var(--success-color);
+}
+
+.edit-btn.save:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.edit-btn.cancel {
+  color: var(--text-secondary);
+}
+
+.edit-btn.cancel:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Conversation Indicator in Mode Toggle */
+.conversation-indicator {
+  margin-left: auto;
+}
+
+.conversation-title-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sidebar Section for Conversations */
+.conversations-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+/* Scrollbar styling for conversation list */
+.conversation-items::-webkit-scrollbar {
+  width: 4px;
+}
+
+.conversation-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation-items::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.conversation-items::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+/* =============================================================================
+   Conversation List Styles
+   ============================================================================= */
+
+/* Sidebar wrapper to contain both Sidebar and ConversationList */
+.sidebar-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  transition: width 0.2s ease;
+}
+
+.sidebar-wrapper.open {
+  width: 280px;
+}
+
+.sidebar-wrapper.closed {
+  width: 56px;
+}
+
+/* Conversation section at bottom of sidebar */
+.sidebar-conversations {
+  padding: 12px;
+  border-top: 1px solid var(--border-color);
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar-conversations .section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.conversation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conversation-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.conversation-new-btn:hover {
+  background: var(--accent-primary-hover);
+}
+
+.conversation-new-btn:active {
+  transform: scale(0.98);
+}
+
+.conversation-new-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.conversation-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.conversation-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.conversation-empty .empty-icon {
+  opacity: 0.4;
+  margin-bottom: 8px;
+}
+
+.conversation-empty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.conversation-empty .empty-hint {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+/* Conversation Item */
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.conversation-item:hover {
+  background: var(--bg-hover);
+}
+
+.conversation-item.active {
+  background: var(--bg-active);
+}
+
+.conversation-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+
+.conversation-item.active .conversation-icon {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.conversation-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.conversation-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.conversation-files {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Actions Menu */
+.conversation-actions {
+  position: relative;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.conversation-item:hover .conversation-actions {
+  opacity: 1;
+}
+
+.conversation-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.conversation-menu-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.conversation-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  min-width: 120px;
+  padding: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.conversation-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.conversation-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.conversation-menu button.danger {
+  color: var(--error-color);
+}
+
+.conversation-menu button.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Edit Mode */
+.conversation-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.conversation-edit-input {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.conversation-edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.edit-btn.save {
+  color: var(--success-color);
+}
+
+.edit-btn.save:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.edit-btn.cancel {
+  color: var(--text-secondary);
+}
+
+.edit-btn.cancel:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Conversation Indicator in Mode Toggle */
+.conversation-indicator {
+  margin-left: auto;
+}
+
+.conversation-title-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sidebar Section for Conversations */
+.conversations-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+/* Scrollbar styling for conversation list */
+.conversation-items::-webkit-scrollbar {
+  width: 4px;
+}
+
+.conversation-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.conversation-items::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.conversation-items::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}

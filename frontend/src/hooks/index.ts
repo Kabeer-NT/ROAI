@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Message, SpreadsheetFile, ToolCall, WebSource, ChatResponse, Followup } from '../types'
+import type { Message, SpreadsheetFile, ToolCall, WebSource, ChatResponse, Followup, SelectionRange } from '../types'
 import { useAuth } from './useAuth'
 
 export { useAuth, AuthProvider } from './useAuth'
@@ -172,7 +172,7 @@ interface UseChatOptions {
 }
 
 // ============================================================================
-// useChat Hook - Updated for sources and better error handling
+// useChat Hook - WITH SELECTION CONTEXT SUPPORT
 // ============================================================================
 
 export function useChat(
@@ -184,7 +184,12 @@ export function useChat(
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  const sendMessage = useCallback(async (content: string) => {
+  /**
+   * Send a message to the chat API
+   * @param content - The message content
+   * @param selectionContext - Optional selection context from StructureViewer "Ask R-O-AI" action
+   */
+  const sendMessage = useCallback(async (content: string, selectionContext?: SelectionRange) => {
     if (!content.trim() || isLoading || !token) return
 
     const userMessage: Message = {
@@ -202,6 +207,15 @@ export function useChat(
       const visibility = options?.getAllSerializedVisibility?.()
       const hasVisibility = visibility && Object.keys(visibility).length > 0
 
+      // Build selection context for backend if provided
+      const selection_context = selectionContext ? {
+        sheetName: selectionContext.sheetName,
+        startCell: selectionContext.startCell,
+        endCell: selectionContext.endCell,
+        cells: selectionContext.cells,
+        rangeString: selectionContext.rangeString,
+      } : undefined
+
       const requestBody = {
         messages: [...messages, userMessage]
           .filter(m => !m.content.startsWith('📊') && !m.content.startsWith('❌') && !m.content.startsWith('🔄'))
@@ -209,6 +223,7 @@ export function useChat(
         model: selectedModel,
         include_followups: true,
         ...(hasVisibility && { visibility }),
+        ...(selection_context && { selection_context }),
       }
 
       const res = await fetch('/api/chat', {
@@ -229,7 +244,6 @@ export function useChat(
           role: 'assistant',
           content: data.error.message || 'Something went wrong. Please try again.',
           timestamp: new Date(),
-          // Include error suggestions as followups
           followups: data.error.suggestions?.map(s => ({ text: s, type: 'followup' as const })),
         }
         setMessages(prev => [...prev, errorMessage])
@@ -241,19 +255,10 @@ export function useChat(
       }
       
       // Extract tool calls with sources
-      const toolCalls: ToolCall[] = (data.tool_calls || []).map(tc => {
-        // Debug: log what we're receiving
-        console.log('Tool call from backend:', tc)
-        return {
-          ...tc,
-          sources: tc.sources || []
-        }
-      })
-      
-      // Debug: log the processed tool calls
-      if (toolCalls.length > 0) {
-        console.log('Processed tool calls with sources:', toolCalls)
-      }
+      const toolCalls: ToolCall[] = (data.tool_calls || []).map(tc => ({
+        ...tc,
+        sources: tc.sources || []
+      }))
       
       // Normalize followups to Followup[] format
       const followups: Followup[] | undefined = data.followups?.map(f => 
