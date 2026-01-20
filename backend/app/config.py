@@ -16,5 +16,8 @@ SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production-use-openssl-rand-h
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-# Database
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./roai.db")
+# Database - defaults to Postgres, falls back to SQLite for quick local dev
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg2://postgres:postgres@127.0.0.1:5434/roai"
+)
