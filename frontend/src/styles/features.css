@@ -3229,3 +3229,54 @@
     opacity: 1;
   }
 }
+/* ============================================================================
+   Sidebar Settings Button Additions
+   Add these to your existing sidebar CSS
+   ============================================================================ */
+
+/* Settings button in user section (expanded sidebar) */
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-btn-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-tertiary, #64748b);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary, #94a3b8);
+}
+
+/* Settings button in rail (collapsed sidebar) */
+.rail-btn.rail-settings {
+  color: var(--text-tertiary, #64748b);
+}
+
+.rail-btn.rail-settings:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent, #a5b4fc);
+}
+
+/* Light theme */
+[data-theme="light"] .settings-btn-icon:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #475569;
+}
+
+[data-theme="light"] .rail-btn.rail-settings:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #4f46e5;
+}
