@@ -1309,3 +1309,171 @@ def get_cache_stats() -> dict:
         "files_loaded": len(spreadsheet_context["files"]),
         "raw_bytes_count": len(spreadsheet_context["raw_bytes"]),
     }
+
+
+
+def restore_file_from_bytes(file_id: str, filename: str = None) -> bool:
+    """
+    Restore a file to context from stored compressed bytes.
+    Useful for re-loading files that were previously added but context was cleared.
+    
+    Args:
+        file_id: The file ID to restore
+        filename: Optional filename override (uses stored filename if not provided)
+    
+    Returns:
+        True if restoration successful, False otherwise
+    """
+    # Get compressed bytes
+    compressed = spreadsheet_context["raw_bytes"].get(file_id)
+    if not compressed:
+        return False
+    
+    # Decompress
+    file_bytes = decompress_bytes(compressed)
+    
+    # Get filename from existing data or use provided
+    if not filename:
+        existing = spreadsheet_context["files"].get(file_id)
+        if existing:
+            filename = existing.get("filename", f"restored_{file_id}")
+        else:
+            filename = f"restored_{file_id}"
+    
+    # Parse based on file type
+    try:
+        if filename.endswith(('.xlsx', '.xls')):
+            # Excel file
+            sheets = {}
+            wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                data = list(ws.values)
+                if data:
+                    headers = data[0]
+                    df = pd.DataFrame(data[1:], columns=headers)
+                else:
+                    df = pd.DataFrame()
+                sheets[sheet_name] = df
+            wb.close()
+        elif filename.endswith('.csv'):
+            # CSV file
+            df = pd.read_csv(BytesIO(file_bytes))
+            sheets = {"Sheet1": df}
+        elif filename.endswith('.tsv'):
+            # TSV file
+            df = pd.read_csv(BytesIO(file_bytes), sep='\t')
+            sheets = {"Sheet1": df}
+        else:
+            # Try as Excel by default
+            sheets = {}
+            wb = openpyxl.load_workbook(BytesIO(file_bytes), data_only=True)
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+                data = list(ws.values)
+                if data:
+                    headers = data[0]
+                    df = pd.DataFrame(data[1:], columns=headers)
+                else:
+                    df = pd.DataFrame()
+                sheets[sheet_name] = df
+            wb.close()
+        
+        # Update context (bytes already stored, just update files and structures)
+        spreadsheet_context["files"][file_id] = {
+            "filename": filename,
+            "sheets": sheets
+        }
+        
+        # Extract structure
+        if filename.endswith(('.xlsx', '.xls')):
+            structures = extract_structure_from_excel(file_bytes)
+        else:
+            structures = {}
+            for sheet_name, df in sheets.items():
+                structures[sheet_name] = extract_structure_from_csv(df, sheet_name)
+        
+        spreadsheet_context["structures"][file_id] = structures
+        
+        # Invalidate any stale caches
+        invalidate_workbook_cache(file_id)
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error restoring file {file_id}: {e}")
+        return False
+    
+def get_raw_bytes_for_storage(file_id: str) -> Optional[bytes]:
+    """
+    Get uncompressed raw bytes for database storage.
+    Use this when saving a file to the database.
+    """
+    compressed = spreadsheet_context["raw_bytes"].get(file_id)
+    if compressed:
+        return decompress_bytes(compressed)
+    return None
+
+
+def get_file_size(file_id: str) -> Optional[int]:
+    """Get the uncompressed file size in bytes."""
+    raw = get_raw_bytes_for_storage(file_id)
+    return len(raw) if raw else None
+
+
+def is_file_loaded(file_id: str) -> bool:
+    """Check if a file is currently loaded in memory."""
+    return file_id in spreadsheet_context["files"]
+
+
+def restore_file_from_bytes(
+    file_id: str, 
+    filename: str, 
+    raw_bytes: bytes,
+    sheet_info: dict = None
+) -> dict:
+    """
+    Restore a file from raw bytes (e.g., loaded from database).
+    This allows reloading files from persistent storage.
+    
+    Args:
+        file_id: The UUID of the file
+        filename: Original filename
+        raw_bytes: The raw file bytes
+        sheet_info: Optional sheet metadata (not currently used, for future)
+    
+    Returns:
+        Dict with sheet summaries
+    """
+    file_buffer = BytesIO(raw_bytes)
+    
+    # Parse into DataFrames based on file type
+    if filename.endswith(".csv"):
+        df = pd.read_csv(file_buffer)
+        sheets = {"Sheet1": df}
+    elif filename.endswith(".tsv"):
+        df = pd.read_csv(file_buffer, sep="\t")
+        sheets = {"Sheet1": df}
+    else:
+        # Excel files
+        sheets = pd.read_excel(file_buffer, sheet_name=None)
+    
+    # Use the existing add_file_to_context function
+    add_file_to_context(file_id, filename, raw_bytes, sheets)
+    
+    # Build sheet summaries for return
+    sheet_summaries = []
+    for sheet_name, df in sheets.items():
+        summary = {
+            "name": sheet_name,
+            "rows": len(df),
+            "columns": len(df.columns),
+            "column_names": df.columns.tolist(),
+        }
+        sheet_summaries.append(summary)
+    
+    return {
+        "file_id": file_id,
+        "filename": filename,
+        "sheets": sheet_summaries
+    }

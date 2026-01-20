@@ -1,11 +1,10 @@
 """
 Spreadsheet Routes (Protected)
 ==============================
-Uploads store raw bytes for formula execution.
-LLM only sees structure, never numeric values.
+Files are stored persistently in the database and can be associated with conversations.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
@@ -25,8 +24,10 @@ from app.services.spreadsheet import (
     list_available_files,
     friendly_error_response,
     extract_context_for_errors,
+    is_file_loaded,
+    restore_file_from_bytes,
 )
-from app.models import User, Spreadsheet
+from app.models import User, Spreadsheet, Conversation, ConversationFile
 
 router = APIRouter(tags=["spreadsheet"])
 
@@ -35,11 +36,18 @@ router = APIRouter(tags=["spreadsheet"])
 # RESPONSE MODELS
 # =============================================================================
 
+class SheetInfo(BaseModel):
+    name: str
+    rows: int
+    columns: int
+    column_names: list[str] = []
+
+
 class UploadResponse(BaseModel):
     success: bool
     file_id: str
     filename: str
-    sheets: list[dict]
+    sheets: list[SheetInfo]
 
 
 class FormulaRequest(BaseModel):
@@ -61,31 +69,30 @@ class FriendlyError(BaseModel):
 
 
 # =============================================================================
-# UPLOAD
+# UPLOAD - Now stores bytes in database
 # =============================================================================
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_spreadsheet(
     file: UploadFile = File(...),
+    conversation_id: Optional[int] = Query(None, description="Auto-add to this conversation"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Upload a spreadsheet. Raw data is stored for execution,
-    but LLM only sees structure (headers, labels, formulas).
+    Upload a spreadsheet. File is stored in database for persistence
+    and loaded into memory for analysis.
     """
     filename = file.filename or "uploaded_file"
     
     if not any(filename.endswith(ext) for ext in [".xlsx", ".xls", ".csv", ".tsv"]):
-        raise HTTPException(status_code=400, detail="Unsupported file type. Please upload .xlsx, .xls, .csv, or .tsv")
+        raise HTTPException(status_code=400, detail="Unsupported file type")
     
     try:
-        # Read raw bytes
         contents = await file.read()
         
-        # Check file size (50MB limit)
         if len(contents) > 50 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB.")
+            raise HTTPException(status_code=413, detail="File too large. Maximum 50MB.")
         
         file_buffer = io.BytesIO(contents)
         
@@ -104,32 +111,49 @@ async def upload_spreadsheet(
         # Build sheet summaries
         sheet_summaries = []
         for sheet_name, df in sheets.items():
-            summary = {
-                "name": sheet_name,
-                "rows": len(df),
-                "columns": len(df.columns),
-                "column_names": df.columns.tolist(),
-            }
-            sheet_summaries.append(summary)
+            sheet_summaries.append(SheetInfo(
+                name=sheet_name,
+                rows=len(df),
+                columns=len(df.columns),
+                column_names=df.columns.tolist()
+            ))
         
-        # Store with raw bytes for execution
+        # Store in memory for immediate use
         add_file_to_context(file_id, filename, contents, sheets)
         
-        # Persist metadata to database
+        # Persist to database with raw bytes
         spreadsheet_record = Spreadsheet(
             user_id=current_user.id,
             file_id=file_id,
             filename=filename,
-            sheet_info=json.dumps({"sheets": sheet_summaries})
+            file_data=contents,  # Store raw bytes!
+            sheet_info={"sheets": [s.model_dump() for s in sheet_summaries]},
+            file_size=len(contents)
         )
         db.add(spreadsheet_record)
+        db.flush()
+        
+        # Auto-add to conversation if specified
+        if conversation_id:
+            conv = db.query(Conversation).filter(
+                Conversation.id == conversation_id,
+                Conversation.user_id == current_user.id
+            ).first()
+            
+            if conv:
+                cf = ConversationFile(
+                    conversation_id=conv.id,
+                    spreadsheet_id=spreadsheet_record.id
+                )
+                db.add(cf)
+        
         db.commit()
         
         return UploadResponse(
             success=True,
             file_id=file_id,
             filename=filename,
-            sheets=sheet_summaries,
+            sheets=sheet_summaries
         )
     
     except pd.errors.EmptyDataError:
@@ -148,13 +172,9 @@ async def execute_formula_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Execute a formula on spreadsheet data.
-    Used by Claude to compute results without seeing raw values.
-    """
+    """Execute a formula on spreadsheet data."""
     file_id = request.file_id
     
-    # Auto-detect file if not specified
     if not file_id:
         files = list_available_files()
         if len(files) == 1:
@@ -168,11 +188,11 @@ async def execute_formula_endpoint(
         else:
             return FriendlyError(
                 icon="📑",
-                message=f"You have {len(files)} files loaded. Which one should I use?",
+                message=f"You have {len(files)} files loaded. Which one?",
                 suggestions=[f"Use {f['filename']}" for f in files[:3]]
             ).model_dump()
     
-    # Verify ownership
+    # Verify ownership and ensure file is loaded
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
         Spreadsheet.user_id == current_user.id
@@ -181,7 +201,11 @@ async def execute_formula_endpoint(
     if not ss:
         raise HTTPException(status_code=404, detail="Spreadsheet not found")
     
-    # Auto-detect sheet if not specified
+    # Load from DB if not in memory
+    if not is_file_loaded(file_id) and ss.file_data:
+        restore_file_from_bytes(file_id, ss.filename, ss.file_data, ss.sheet_info)
+    
+    # Auto-detect sheet
     sheet_name = request.sheet_name
     if not sheet_name:
         if file_id in spreadsheet_context["files"]:
@@ -200,8 +224,7 @@ async def execute_formula_endpoint(
         
         if isinstance(result, dict) and "error" in result:
             context = extract_context_for_errors(file_id)
-            friendly = friendly_error_response(Exception(result["error"]), context)
-            return friendly
+            return friendly_error_response(Exception(result["error"]), context)
         
         return {
             "formula": request.formula,
@@ -224,10 +247,7 @@ async def execute_python_endpoint(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Execute Python/pandas code on spreadsheet data.
-    More flexible than formulas for complex queries.
-    """
+    """Execute Python/pandas code on spreadsheet data."""
     file_id = request.file_id
     
     if not file_id:
@@ -237,7 +257,7 @@ async def execute_python_endpoint(
         elif len(files) == 0:
             return FriendlyError(
                 icon="📁",
-                message="No spreadsheet loaded. Please upload a file first.",
+                message="No spreadsheet loaded.",
                 suggestions=[]
             ).model_dump()
         else:
@@ -247,7 +267,6 @@ async def execute_python_endpoint(
                 suggestions=[f"Use {f['filename']}" for f in files[:3]]
             ).model_dump()
     
-    # Verify ownership
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
         Spreadsheet.user_id == current_user.id
@@ -256,13 +275,16 @@ async def execute_python_endpoint(
     if not ss:
         raise HTTPException(status_code=404, detail="Spreadsheet not found")
     
+    # Load from DB if not in memory
+    if not is_file_loaded(file_id) and ss.file_data:
+        restore_file_from_bytes(file_id, ss.filename, ss.file_data, ss.sheet_info)
+    
     try:
         result = execute_python_query(request.code, file_id)
         
         if isinstance(result, dict) and "error" in result:
             context = extract_context_for_errors(file_id)
-            friendly = friendly_error_response(Exception(result["error"]), context)
-            return friendly
+            return friendly_error_response(Exception(result["error"]), context)
         
         return {
             "code": request.code,
@@ -285,10 +307,7 @@ async def get_spreadsheet_structure(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get the structure of a spreadsheet (what the LLM sees).
-    When include_cells=True, also returns numeric_values for the UI preview.
-    """
+    """Get the structure of a spreadsheet."""
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
         Spreadsheet.user_id == current_user.id
@@ -297,11 +316,22 @@ async def get_spreadsheet_structure(
     if not ss:
         raise HTTPException(status_code=404, detail="Spreadsheet not found")
     
+    # Load from DB if not in memory
+    if not is_file_loaded(file_id):
+        if ss.file_data:
+            restore_file_from_bytes(file_id, ss.filename, ss.file_data, ss.sheet_info)
+        else:
+            return {
+                "file_id": file_id,
+                "in_memory": False,
+                "message": "File data not available. Please re-upload."
+            }
+    
     if file_id not in spreadsheet_context["structures"]:
         return {
             "file_id": file_id,
             "in_memory": False,
-            "message": "Spreadsheet not in memory. Please re-upload."
+            "message": "Structure not available."
         }
     
     structures = spreadsheet_context["structures"][file_id]
@@ -313,7 +343,6 @@ async def get_spreadsheet_structure(
     }
     
     for name, s in structures.items():
-        # Handle both dict and list formats for backwards compatibility
         if isinstance(s.row_labels, dict):
             row_labels = dict(list(s.row_labels.items())[:25])
         else:
@@ -333,12 +362,10 @@ async def get_spreadsheet_structure(
             "cell_type_counts": _count_types(s.cell_types) if s.cell_types else {}
         }
         
-        # Include text_values for grid view if requested
         if include_cells:
             if hasattr(s, 'text_values') and s.text_values:
                 sheet_data["text_values"] = s.text_values
             
-            # Include numeric values for UI preview
             if file_id in spreadsheet_context["files"]:
                 file_data = spreadsheet_context["files"][file_id]
                 if name in file_data["sheets"]:
@@ -362,7 +389,6 @@ async def get_spreadsheet_structure(
                     if numeric_values:
                         sheet_data["numeric_values"] = numeric_values
         
-        # Include full cell types for grid view if requested
         if include_cells and hasattr(s, 'cell_types') and s.cell_types:
             sheet_data["cell_types"] = s.cell_types
         
@@ -372,7 +398,6 @@ async def get_spreadsheet_structure(
 
 
 def _get_column_letter(idx: int) -> str:
-    """Convert 0-indexed column number to Excel-style letter (A, B, ..., Z, AA, etc.)"""
     result = ""
     idx += 1
     while idx > 0:
@@ -401,22 +426,25 @@ async def get_spreadsheet_info(
     """Get all spreadsheets for the current user."""
     user_spreadsheets = db.query(Spreadsheet).filter(
         Spreadsheet.user_id == current_user.id
-    ).all()
+    ).order_by(Spreadsheet.created_at.desc()).all()
     
     if not user_spreadsheets:
         return {"loaded": False, "files": []}
     
     files = []
     for ss in user_spreadsheets:
-        sheet_info = json.loads(ss.sheet_info)
+        sheet_info = ss.sheet_info or {}
         
         file_info = {
             "id": ss.file_id,
             "filename": ss.filename,
-            "in_memory": ss.file_id in spreadsheet_context["files"],
+            "in_memory": is_file_loaded(ss.file_id),
+            "has_data": ss.file_data is not None,
+            "file_size": ss.file_size,
+            "created_at": ss.created_at.isoformat() if ss.created_at else None,
         }
         
-        if ss.file_id in spreadsheet_context["files"]:
+        if is_file_loaded(ss.file_id):
             file_data = spreadsheet_context["files"][ss.file_id]
             file_info["sheets"] = [
                 {
@@ -429,7 +457,6 @@ async def get_spreadsheet_info(
             ]
         else:
             file_info["sheets"] = sheet_info.get("sheets", [])
-            file_info["needs_reupload"] = True
         
         files.append(file_info)
     
@@ -442,7 +469,7 @@ async def delete_spreadsheet(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete a specific spreadsheet."""
+    """Delete a spreadsheet."""
     ss = db.query(Spreadsheet).filter(
         Spreadsheet.file_id == file_id,
         Spreadsheet.user_id == current_user.id
@@ -474,3 +501,35 @@ async def clear_all_spreadsheets(
     
     db.commit()
     return {"success": True}
+
+
+# =============================================================================
+# RESTORE FILE ENDPOINT
+# =============================================================================
+
+@router.post("/spreadsheet/{file_id}/restore")
+async def restore_spreadsheet(
+    file_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Restore a file from database to memory."""
+    ss = db.query(Spreadsheet).filter(
+        Spreadsheet.file_id == file_id,
+        Spreadsheet.user_id == current_user.id
+    ).first()
+    
+    if not ss:
+        raise HTTPException(status_code=404, detail="Spreadsheet not found")
+    
+    if is_file_loaded(file_id):
+        return {"status": "already_loaded", "file_id": file_id}
+    
+    if not ss.file_data:
+        raise HTTPException(status_code=400, detail="No file data stored")
+    
+    try:
+        restore_file_from_bytes(file_id, ss.filename, ss.file_data, ss.sheet_info)
+        return {"status": "restored", "file_id": file_id, "filename": ss.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to restore: {str(e)}")
