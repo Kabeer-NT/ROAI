@@ -1,39 +1,73 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks'
-import { ChatPage } from './pages/ChatPage'
-import { AuthPage } from './pages/AuthPage'
-import { Hexagon, Loader2 } from 'lucide-react'
-// import './styles/global.css'
-import './styles/base.css';
-import './styles/components.css';
-import './styles/features.css';
+import { AuthPage, ChatPage, ConversationsPage } from './pages'
 
-function AppContent() {
+// Import styles
+import './styles/base.css'
+import './styles/components.css'
+import './styles/features.css'
+// import './styles/conversations.css'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
 
   if (isLoading) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-logo">
-          <Hexagon className="logo-icon spinning" size={32} />
-          <span className="loading-text">Loading...</span>
-        </div>
-      </div>
-    )
+    return <div className="loading-screen">Loading...</div>
   }
 
   if (!user) {
-    return <AuthPage />
+    return <Navigate to="/auth" replace />
   }
 
-  return <ChatPage />
+  return <>{children}</>
 }
 
-function App() {
+function AppRoutes() {
+  const { user } = useAuth()
+
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <Routes>
+      {/* Auth */}
+      <Route
+        path="/auth"
+        element={user ? <Navigate to="/conversations" replace /> : <AuthPage />}
+      />
+
+      {/* Conversations List (Landing Page) */}
+      <Route
+        path="/conversations"
+        element={
+          <ProtectedRoute>
+            <ConversationsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Chat with specific conversation */}
+      <Route
+        path="/chat/:conversationId"
+        element={
+          <ProtectedRoute>
+            <ChatPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Redirect root to conversations */}
+      <Route path="/" element={<Navigate to="/conversations" replace />} />
+
+      {/* Catch-all redirect */}
+      <Route path="*" element={<Navigate to="/conversations" replace />} />
+    </Routes>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
