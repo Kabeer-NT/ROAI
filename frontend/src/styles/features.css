@@ -19,6 +19,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-10);
+  min-height: 0;
 }
 
 .input-container {
@@ -1937,6 +1938,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 /* Work mode - side by side */
@@ -1954,6 +1956,7 @@
   min-width: 280px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .main.work-mode .chat-panel .chat-area {
