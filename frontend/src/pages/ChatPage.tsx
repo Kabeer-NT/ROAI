@@ -11,6 +11,7 @@ import {
   WorkspacePanel,
   Settings,
   getDefaultSettings,
+  StructureViewer,
 } from '../components'
 import type { SettingsData } from '../components'
 import type { SelectionRange, Message, SpreadsheetFile, ToolCall, WebSource } from '../types'
@@ -36,6 +37,7 @@ export function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   const [showSettings, setShowSettings] = useState(false)
+  const [structureViewerFileId, setStructureViewerFileId] = useState<string | null>(null)
   const [settings, setSettings] = useState<SettingsData>(() => {
     const saved = localStorage.getItem('roai-settings')
     if (saved) {
@@ -430,6 +432,7 @@ export function ChatPage() {
         onFileRemove={handleFileRemove}
         onFilesAdd={handleFilesAdd}
         onFilePickerOpen={fileSystemSupported ? handleFilePickerOpen : undefined}
+        onViewStructure={(fileId) => setStructureViewerFileId(fileId)}
         isUploading={isUploading}
         isReloading={isReloading}
         getFileVisibility={getFileVisibility}
@@ -534,6 +537,21 @@ export function ChatPage() {
       />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {structureViewerFileId && (() => {
+        const file = files.find(f => f.id === structureViewerFileId)
+        if (!file) return null
+        return (
+          <StructureViewer
+            fileId={file.id}
+            filename={file.filename}
+            isOpen={true}
+            onClose={() => setStructureViewerFileId(null)}
+            fileVisibility={getFileVisibility(file.filename)}
+            onFileVisibilityChange={(vis) => setFileVisibility(file.filename, vis)}
+          />
+        )
+      })()}
     </div>
   )
 }
