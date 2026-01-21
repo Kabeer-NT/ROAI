@@ -417,7 +417,7 @@ export function ChatPage() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         theme={theme}
-        onThemeToggle={toggleTheme}
+        onThemeToggle={() => setSettings(s => ({ ...s, theme: s.theme === 'dark' ? 'light' : 'dark' }))}
         onSettingsClick={() => setShowSettings(true)}
         conversations={conversations}
         activeConversationId={activeConversation?.id ?? null}
