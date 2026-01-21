@@ -4,9 +4,10 @@ interface DropZoneProps {
   onFilesAdd: (files: FileList) => void
   onFilePickerOpen?: () => Promise<boolean>
   isUploading: boolean
+  compact?: boolean  // New prop for sidebar inline mode
 }
 
-export function DropZone({ onFilesAdd, onFilePickerOpen, isUploading }: DropZoneProps) {
+export function DropZone({ onFilesAdd, onFilePickerOpen, isUploading, compact = false }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -50,9 +51,11 @@ export function DropZone({ onFilesAdd, onFilePickerOpen, isUploading }: DropZone
     }
   }
 
+  const baseClass = compact ? 'drop-zone-compact' : 'drop-zone'
+  
   return (
     <div
-      className={`drop-zone ${isDragging ? 'dragging' : ''} ${isUploading ? 'uploading' : ''}`}
+      className={`${baseClass} ${isDragging ? 'dragging' : ''} ${isUploading ? 'uploading' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -66,25 +69,39 @@ export function DropZone({ onFilesAdd, onFilePickerOpen, isUploading }: DropZone
         onChange={handleChange}
         hidden
       />
-      <div className="drop-zone-content">
-        {isUploading ? (
-          <>
-            <span className="drop-zone-spinner" />
-            <span>Uploading...</span>
-          </>
-        ) : isDragging ? (
-          <>
-            <span className="drop-zone-icon">↓</span>
-            <span>Drop files here</span>
-          </>
-        ) : (
-          <>
-            <span className="drop-zone-icon">+</span>
-            <span>Drop files or click to upload</span>
-            <span className="drop-zone-hint">.xlsx, .csv, .tsv</span>
-          </>
-        )}
-      </div>
+      
+      {compact ? (
+        // Compact inline layout for sidebar
+        <>
+          <span className="drop-zone-compact-icon">
+            {isUploading ? '↻' : '+'}
+          </span>
+          <span className="drop-zone-compact-text">
+            {isUploading ? 'Uploading...' : isDragging ? 'Drop here' : 'Add files'}
+          </span>
+        </>
+      ) : (
+        // Full stacked layout for welcome screen
+        <div className="drop-zone-content">
+          {isUploading ? (
+            <>
+              <span className="drop-zone-spinner" />
+              <span>Uploading...</span>
+            </>
+          ) : isDragging ? (
+            <>
+              <span className="drop-zone-icon">↓</span>
+              <span>Drop files here</span>
+            </>
+          ) : (
+            <>
+              <span className="drop-zone-icon">+</span>
+              <span>Drop files or click to upload</span>
+              <span className="drop-zone-hint">.xlsx, .csv, .tsv</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
