@@ -1,32 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
 import { 
   LogOut, 
-  User, 
   RefreshCw, 
   Hexagon, 
   ChevronLeft, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronRight as ChevronExpand,
   Sun, 
   Moon, 
-  EyeOff, 
-  FileSpreadsheet, 
   Settings,
   Plus,
-  MessageSquare,
   MoreHorizontal,
   Edit2,
   Trash2,
   Check,
   X,
-  Search,
-  Upload,
-  FolderOpen
+  Search
 } from 'lucide-react'
 import type { SpreadsheetFile } from '../types'
 import type { FileVisibilityState } from '../hooks/useVisibility'
 import type { ConversationSummary } from '../hooks/useConversations'
-import { FileCard } from './FileCard'
-import { DropZone } from './DropZone'
 import { useAuth } from '../hooks'
 
 // ============================================================================
@@ -37,8 +30,6 @@ interface VisibilityStats {
   filesWithHidden: number
   totalHiddenItems: number
 }
-
-type SidebarTab = 'conversations' | 'files'
 
 interface SidebarProps {
   isOpen: boolean
@@ -56,11 +47,12 @@ interface SidebarProps {
   onConversationRename: (id: number, title: string) => void
   isLoadingConversations?: boolean
   
-  // Files (shown when in a conversation)
+  // Files
   files?: SpreadsheetFile[]
   onFileRemove?: (id: string) => void
   onFilesAdd?: (files: FileList) => void
   onFilePickerOpen?: () => Promise<boolean>
+  onViewStructure?: (fileId: string) => void
   isUploading?: boolean
   isReloading?: boolean
   getFileVisibility?: (filename: string) => FileVisibilityState
@@ -69,30 +61,211 @@ interface SidebarProps {
 }
 
 // ============================================================================
-// Conversation Item Component
+// File Item - Click to View Structure
+// ============================================================================
+
+interface FileItemProps {
+  file: SpreadsheetFile
+  onRemove: () => void
+  onViewStructure?: (fileId: string) => void
+}
+
+function FileItem({ file, onRemove, onViewStructure }: FileItemProps) {
+  const ext = file.filename.split('.').pop()?.toLowerCase() || ''
+  const isExcel = ['xlsx', 'xls'].includes(ext)
+  
+  const sheetCount = file.sheets?.length || 0
+  const totalRows = file.sheets?.reduce((sum, s) => sum + s.rows, 0) || 0
+
+  return (
+    <div 
+      className="sb-file"
+      onClick={() => onViewStructure?.(file.id)}
+    >
+      <div className={`sb-file-icon ${isExcel ? 'sb-file-icon--xlsx' : 'sb-file-icon--csv'}`}>
+        {isExcel ? '📊' : '📄'}
+      </div>
+      <div className="sb-file-info">
+        <div className="sb-file-name">{file.filename}</div>
+        <div className="sb-file-meta">
+          {sheetCount > 0 
+            ? `${sheetCount} sheet${sheetCount > 1 ? 's' : ''} · ${totalRows} rows`
+            : ext.toUpperCase()
+          }
+        </div>
+      </div>
+      <button 
+        className="sb-file-remove" 
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }} 
+        title="Remove file"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+// ============================================================================
+// Files Card (Dropdown)
+// ============================================================================
+
+interface FilesCardProps {
+  files: SpreadsheetFile[]
+  onFileRemove: (id: string) => void
+  onFilesAdd: (files: FileList) => void
+  onFilePickerOpen?: () => Promise<boolean>
+  onViewStructure?: (fileId: string) => void
+  isUploading: boolean
+  isReloading: boolean
+}
+
+function FilesCard({ 
+  files, 
+  onFileRemove, 
+  onFilesAdd, 
+  onFilePickerOpen,
+  onViewStructure,
+  isUploading,
+  isReloading 
+}: FilesCardProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const handleAddClick = async () => {
+    if (onFilePickerOpen) {
+      const handled = await onFilePickerOpen()
+      if (handled) return
+    }
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      onFilesAdd(e.target.files)
+      e.target.value = ''
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => {
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onFilesAdd(e.dataTransfer.files)
+    }
+  }
+
+  return (
+    <div 
+      className={`sb-files-card ${isDragging ? 'sb-files-card--dragging' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {files.length > 0 ? (
+        <>
+          {files.map(file => (
+            <FileItem
+              key={file.id}
+              file={file}
+              onRemove={() => onFileRemove(file.id)}
+              onViewStructure={onViewStructure}
+            />
+          ))}
+        </>
+      ) : (
+        <div className="sb-files-empty">No files yet</div>
+      )}
+      
+      <button 
+        className={`sb-add-file ${isUploading ? 'sb-add-file--uploading' : ''}`}
+        onClick={handleAddClick}
+        disabled={isUploading}
+      >
+        {isUploading ? (
+          <>
+            <RefreshCw size={12} className="sb-spinning" />
+            <span>Uploading...</span>
+          </>
+        ) : (
+          <>
+            <Plus size={12} />
+            <span>Add file</span>
+          </>
+        )}
+      </button>
+      
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv,.tsv"
+        multiple
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+      />
+      
+      {isReloading && (
+        <div className="sb-files-reloading">
+          <RefreshCw size={10} className="sb-spinning" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Conversation Item
 // ============================================================================
 
 interface ConversationItemProps {
   conversation: ConversationSummary
   isActive: boolean
+  isExpanded: boolean
   onSelect: () => void
+  onToggleExpand: () => void
   onRename: (title: string) => void
   onDelete: () => void
+  files: SpreadsheetFile[]
+  onFileRemove: (id: string) => void
+  onFilesAdd: (files: FileList) => void
+  onFilePickerOpen?: () => Promise<boolean>
+  onViewStructure?: (fileId: string) => void
+  isUploading: boolean
+  isReloading: boolean
 }
 
 function ConversationItem({ 
   conversation, 
-  isActive, 
+  isActive,
+  isExpanded,
   onSelect, 
+  onToggleExpand,
   onRename, 
-  onDelete 
+  onDelete,
+  files,
+  onFileRemove,
+  onFilesAdd,
+  onFilePickerOpen,
+  onViewStructure,
+  isUploading,
+  isReloading
 }: ConversationItemProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(conversation.title)
   const [showMenu, setShowMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // Close menu on click outside
   useEffect(() => {
     if (!showMenu) return
     const handleClick = (e: MouseEvent) => {
@@ -103,23 +276,6 @@ function ConversationItem({
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showMenu])
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diff = now.getTime() - date.getTime()
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-    
-    if (days === 0) {
-      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    } else if (days === 1) {
-      return 'Yesterday'
-    } else if (days < 7) {
-      return date.toLocaleDateString('en-US', { weekday: 'short' })
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    }
-  }
 
   const handleSave = () => {
     if (editTitle.trim() && editTitle.trim() !== conversation.title) {
@@ -140,9 +296,17 @@ function ConversationItem({
     setShowMenu(false)
   }
 
+  const handleItemClick = () => {
+    if (isActive) {
+      onToggleExpand()
+    } else {
+      onSelect()
+    }
+  }
+
   if (isEditing) {
     return (
-      <div className="conv-item editing">
+      <div className="sb-item sb-item--editing">
         <input
           type="text"
           value={editTitle}
@@ -152,13 +316,13 @@ function ConversationItem({
             if (e.key === 'Escape') handleCancel()
           }}
           autoFocus
-          className="conv-edit-input"
+          className="sb-edit-input"
         />
-        <div className="conv-edit-actions">
-          <button onClick={handleSave} className="conv-edit-btn save">
+        <div className="sb-edit-actions">
+          <button onClick={handleSave} className="sb-edit-btn sb-edit-btn--save">
             <Check size={14} />
           </button>
-          <button onClick={handleCancel} className="conv-edit-btn cancel">
+          <button onClick={handleCancel} className="sb-edit-btn sb-edit-btn--cancel">
             <X size={14} />
           </button>
         </div>
@@ -167,91 +331,65 @@ function ConversationItem({
   }
 
   return (
-    <div 
-      className={`conv-item ${isActive ? 'active' : ''}`}
-      onClick={onSelect}
-    >
-      <MessageSquare size={16} className="conv-icon" />
-      <div className="conv-content">
-        <div className="conv-title">{conversation.title}</div>
-        <div className="conv-meta">
-          <span className="conv-date">{formatDate(conversation.updated_at)}</span>
-          {conversation.file_count > 0 && (
-            <span className="conv-files">
-              <FileSpreadsheet size={10} />
-              {conversation.file_count}
-            </span>
+    <>
+      <div 
+        className={`sb-item ${isActive ? 'sb-item--active' : ''} ${isExpanded ? 'sb-item--expanded' : ''}`}
+        onClick={handleItemClick}
+      >
+        <span className="sb-item-dot" />
+        <span className="sb-item-title">{conversation.title}</span>
+        
+        {conversation.file_count > 0 && (
+          <span className="sb-item-badge">{conversation.file_count}</span>
+        )}
+        
+        <ChevronExpand size={14} className="sb-item-chevron" />
+        
+        <div className="sb-item-actions" ref={menuRef}>
+          <button
+            className="sb-item-menu-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(!showMenu)
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+          
+          {showMenu && (
+            <div className="sb-menu">
+              <button onClick={(e) => {
+                e.stopPropagation()
+                setIsEditing(true)
+                setShowMenu(false)
+              }}>
+                <Edit2 size={12} />
+                Rename
+              </button>
+              <button onClick={(e) => {
+                e.stopPropagation()
+                handleDelete()
+              }} className="sb-menu-danger">
+                <Trash2 size={12} />
+                Delete
+              </button>
+            </div>
           )}
         </div>
       </div>
       
-      <div className="conv-actions" ref={menuRef}>
-        <button
-          className="conv-menu-btn"
-          onClick={(e) => {
-            e.stopPropagation()
-            setShowMenu(!showMenu)
-          }}
-        >
-          <MoreHorizontal size={14} />
-        </button>
-        
-        {showMenu && (
-          <div className="conv-menu">
-            <button onClick={(e) => {
-              e.stopPropagation()
-              setIsEditing(true)
-              setShowMenu(false)
-            }}>
-              <Edit2 size={12} />
-              Rename
-            </button>
-            <button onClick={(e) => {
-              e.stopPropagation()
-              handleDelete()
-            }} className="danger">
-              <Trash2 size={12} />
-              Delete
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ============================================================================
-// Tab Toggle Component
-// ============================================================================
-
-interface TabToggleProps {
-  activeTab: SidebarTab
-  onTabChange: (tab: SidebarTab) => void
-  fileCount: number
-  hasActiveConversation: boolean
-}
-
-function TabToggle({ activeTab, onTabChange, fileCount, hasActiveConversation }: TabToggleProps) {
-  return (
-    <div className="sidebar-tabs">
-      <button 
-        className={`sidebar-tab ${activeTab === 'conversations' ? 'active' : ''}`}
-        onClick={() => onTabChange('conversations')}
-      >
-        <MessageSquare size={14} />
-        <span>Chats</span>
-      </button>
-      <button 
-        className={`sidebar-tab ${activeTab === 'files' ? 'active' : ''}`}
-        onClick={() => onTabChange('files')}
-        disabled={!hasActiveConversation}
-        title={!hasActiveConversation ? 'Select a conversation first' : undefined}
-      >
-        <FolderOpen size={14} />
-        <span>Files</span>
-        {fileCount > 0 && <span className="tab-badge">{fileCount}</span>}
-      </button>
-    </div>
+      {isActive && isExpanded && (
+        <FilesCard
+          files={files}
+          onFileRemove={onFileRemove}
+          onFilesAdd={onFilesAdd}
+          onFilePickerOpen={onFilePickerOpen}
+          onViewStructure={onViewStructure}
+          isUploading={isUploading}
+          isReloading={isReloading}
+        />
+      )}
+    </>
   )
 }
 
@@ -276,25 +414,20 @@ export function Sidebar({
   onFileRemove,
   onFilesAdd,
   onFilePickerOpen,
+  onViewStructure,
   isUploading = false,
   isReloading = false,
-  getFileVisibility,
-  setFileVisibility,
-  visibilityStats,
 }: SidebarProps) {
   const { user, logout } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeTab, setActiveTab] = useState<SidebarTab>('conversations')
+  const [expandedId, setExpandedId] = useState<number | null>(null)
   
-  const isUsingNewSystem = !!getFileVisibility && !!setFileVisibility
-  const hasActiveConversation = activeConversationId !== null
-  
-  // Switch to conversations tab when no active conversation
+  // Auto-expand active conversation
   useEffect(() => {
-    if (!hasActiveConversation && activeTab === 'files') {
-      setActiveTab('conversations')
+    if (activeConversationId !== null) {
+      setExpandedId(activeConversationId)
     }
-  }, [hasActiveConversation, activeTab])
+  }, [activeConversationId])
   
   // Filter conversations by search
   const filteredConversations = searchQuery.trim()
@@ -306,219 +439,164 @@ export function Sidebar({
   // Group conversations by date
   const groupedConversations = groupConversationsByDate(filteredConversations)
   
+  const handleToggleExpand = (id: number) => {
+    setExpandedId(expandedId === id ? null : id)
+  }
+  
   return (
-    <aside className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
+    <aside className={`sb ${isOpen ? 'sb--open' : 'sb--closed'}`}>
       {/* Header */}
-      <div className="sidebar-header">
+      <div className="sb-header">
         {isOpen && (
-          <div className="logo">
-            <Hexagon className="logo-icon" size={24} />
-            <span className="logo-text">R-O-AI</span>
+          <div className="sb-logo">
+            <Hexagon className="sb-logo-icon" size={22} />
+            <span className="sb-logo-text">R-O-AI</span>
           </div>
         )}
-        <button className="sidebar-toggle" onClick={onToggle}>
-          {isOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        <button className="sb-collapse" onClick={onToggle}>
+          {isOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
       </div>
 
-      {/* Collapsed: Icon rail */}
+      {/* Collapsed Rail */}
       {!isOpen && (
-        <div className="sidebar-rail">
+        <div className="sb-rail">
           <button 
-            className="rail-btn rail-new" 
+            className="sb-rail-btn sb-rail-btn--new" 
             onClick={onConversationNew}
             title="New conversation"
           >
             <Plus size={20} />
           </button>
           
-          {onSettingsClick && (
-            <button className="rail-btn" onClick={onSettingsClick} title="Settings">
-              <Settings size={20} />
-            </button>
-          )}
+          <div className="sb-rail-spacer" />
           
           {onThemeToggle && (
-            <button className="rail-btn" onClick={onThemeToggle} title={`${theme === 'dark' ? 'Dark' : 'Light'} Mode`}>
-              {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+            <button 
+              className="sb-rail-btn" 
+              onClick={onThemeToggle} 
+              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            >
+              {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
             </button>
           )}
-
-          <div className="rail-spacer" />
           
-          <button className="rail-btn" title={user?.full_name || 'User'}>
-            <User size={20} />
+          {onSettingsClick && (
+            <button className="sb-rail-btn" onClick={onSettingsClick} title="Settings">
+              <Settings size={18} />
+            </button>
+          )}
+          
+          <button 
+            className="sb-rail-btn sb-rail-btn--user" 
+            title={user?.full_name || 'User'}
+          >
+            {user?.full_name?.charAt(0) || 'U'}
           </button>
         </div>
       )}
 
       {/* Expanded Content */}
       {isOpen && (
-        <div className="sidebar-content">
-          {/* New Conversation Button */}
-          <div className="sidebar-section">
-            <button className="new-chat-btn" onClick={onConversationNew}>
-              <Plus size={18} />
+        <div className="sb-content">
+          {/* New Conversation */}
+          <div className="sb-top">
+            <button className="sb-new-btn" onClick={onConversationNew}>
+              <Plus size={16} />
               <span>New conversation</span>
             </button>
           </div>
 
-          {/* Tab Toggle */}
-          <div className="sidebar-section tabs-section">
-            <TabToggle 
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              fileCount={files.length}
-              hasActiveConversation={hasActiveConversation}
-            />
-          </div>
+          <div className="sb-divider" />
 
-          {/* Conversations Tab */}
-          {activeTab === 'conversations' && (
-            <>
-              {/* Search */}
-              {conversations.length > 5 && (
-                <div className="sidebar-section search-section">
-                  <div className="search-input-wrapper">
-                    <Search size={14} className="search-icon" />
-                    <input
-                      type="text"
-                      placeholder="Search conversations..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="search-input"
-                    />
-                    {searchQuery && (
-                      <button 
-                        className="search-clear"
-                        onClick={() => setSearchQuery('')}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Conversations List */}
-              <div className="sidebar-section conversations-section">
-                {isLoadingConversations ? (
-                  <div className="conv-loading">
-                    <RefreshCw size={16} className="spinning" />
-                    <span>Loading...</span>
-                  </div>
-                ) : filteredConversations.length === 0 ? (
-                  <div className="conv-empty">
-                    {searchQuery ? (
-                      <>
-                        <Search size={20} className="empty-icon" />
-                        <p>No results for "{searchQuery}"</p>
-                      </>
-                    ) : (
-                      <>
-                        <MessageSquare size={20} className="empty-icon" />
-                        <p>No conversations yet</p>
-                        <p className="empty-hint">Start a new conversation</p>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="conv-list">
-                    {Object.entries(groupedConversations).map(([group, convs]) => (
-                      <div key={group} className="conv-group">
-                        <div className="conv-group-label">{group}</div>
-                        {convs.map(conv => (
-                          <ConversationItem
-                            key={conv.id}
-                            conversation={conv}
-                            isActive={conv.id === activeConversationId}
-                            onSelect={() => onConversationSelect(conv.id)}
-                            onRename={(title) => onConversationRename(conv.id, title)}
-                            onDelete={() => onConversationDelete(conv.id)}
-                          />
-                        ))}
-                      </div>
-                    ))}
-                  </div>
+          {/* Conversations List */}
+          <div className="sb-list">
+            {/* Search (only if many conversations) */}
+            {conversations.length > 5 && (
+              <div className="sb-search">
+                <Search size={14} className="sb-search-icon" />
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="sb-search-input"
+                />
+                {searchQuery && (
+                  <button className="sb-search-clear" onClick={() => setSearchQuery('')}>
+                    <X size={14} />
+                  </button>
                 )}
               </div>
-            </>
-          )}
+            )}
 
-          {/* Files Tab */}
-          {activeTab === 'files' && hasActiveConversation && onFilesAdd && (
-            <div className="sidebar-section files-section">
-              {/* Drop Zone */}
-              <DropZone 
-                onFilesAdd={onFilesAdd} 
-                onFilePickerOpen={onFilePickerOpen}
-                isUploading={isUploading} 
-              />
-
-              {/* Hidden Files Indicator */}
-              {visibilityStats && visibilityStats.totalHiddenItems > 0 && (
-                <div className="visibility-indicator">
-                  <EyeOff size={14} />
-                  <span>{visibilityStats.totalHiddenItems} hidden</span>
-                </div>
-              )}
-
-              {/* Files List */}
-              {files.length > 0 ? (
-                <div className="files-list">
-                  <div className="files-list-header">
-                    <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
-                    {isReloading && (
-                      <RefreshCw size={12} className="reloading-icon spinning" />
-                    )}
-                  </div>
-                  {files.map(file => (
-                    <FileCard
-                      key={file.id}
-                      file={file}
-                      onRemove={() => onFileRemove?.(file.id)}
-                      fileVisibility={isUsingNewSystem ? getFileVisibility!(file.filename) : undefined}
-                      onFileVisibilityChange={isUsingNewSystem 
-                        ? (v) => setFileVisibility!(file.filename, v) 
-                        : undefined
-                      }
+            {/* Conversations */}
+            {isLoadingConversations ? (
+              <div className="sb-empty">
+                <RefreshCw size={16} className="sb-spinning" />
+                <span>Loading...</span>
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="sb-empty">
+                {searchQuery ? (
+                  <span>No results for "{searchQuery}"</span>
+                ) : (
+                  <>
+                    <span>No conversations yet</span>
+                    <span className="sb-empty-hint">Start a new conversation</span>
+                  </>
+                )}
+              </div>
+            ) : (
+              Object.entries(groupedConversations).map(([group, convs]) => (
+                <div key={group} className="sb-group">
+                  <div className="sb-group-label">{group}</div>
+                  {convs.map(conv => (
+                    <ConversationItem
+                      key={conv.id}
+                      conversation={conv}
+                      isActive={conv.id === activeConversationId}
+                      isExpanded={conv.id === expandedId}
+                      onSelect={() => onConversationSelect(conv.id)}
+                      onToggleExpand={() => handleToggleExpand(conv.id)}
+                      onRename={(title) => onConversationRename(conv.id, title)}
+                      onDelete={() => onConversationDelete(conv.id)}
+                      files={conv.id === activeConversationId ? files : []}
+                      onFileRemove={(id) => onFileRemove?.(id)}
+                      onFilesAdd={(f) => onFilesAdd?.(f)}
+                      onFilePickerOpen={onFilePickerOpen}
+                      onViewStructure={onViewStructure}
+                      isUploading={isUploading}
+                      isReloading={isReloading}
                     />
                   ))}
                 </div>
-              ) : (
-                <div className="files-empty">
-                  <Upload size={24} className="empty-icon" />
-                  <p>No files yet</p>
-                  <p className="empty-hint">Drop files above or click to upload</p>
-                </div>
-              )}
-            </div>
-          )}
+              ))
+            )}
+          </div>
 
           {/* Footer */}
-          <div className="sidebar-footer">
-            <div className="user-section">
-              <div className="user-avatar">
+          <div className="sb-footer">
+            <div className="sb-user">
+              <div className="sb-user-avatar">
                 {user?.full_name?.charAt(0) || 'U'}
               </div>
-              <div className="user-info">
-                <div className="user-name">{user?.full_name || 'User'}</div>
-              </div>
-              <div className="user-actions">
-                {onThemeToggle && (
-                  <button className="footer-btn" onClick={onThemeToggle} title="Toggle theme">
-                    {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-                  </button>
-                )}
-                {onSettingsClick && (
-                  <button className="footer-btn" onClick={onSettingsClick} title="Settings">
-                    <Settings size={16} />
-                  </button>
-                )}
-                <button className="footer-btn" onClick={logout} title="Sign out">
-                  <LogOut size={16} />
+              <span className="sb-user-name">{user?.full_name || 'User'}</span>
+            </div>
+            <div className="sb-footer-actions">
+              {onThemeToggle && (
+                <button className="sb-footer-btn" onClick={onThemeToggle} title="Toggle theme">
+                  {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
                 </button>
-              </div>
+              )}
+              {onSettingsClick && (
+                <button className="sb-footer-btn" onClick={onSettingsClick} title="Settings">
+                  <Settings size={15} />
+                </button>
+              )}
+              <button className="sb-footer-btn" onClick={logout} title="Sign out">
+                <LogOut size={15} />
+              </button>
             </div>
           </div>
         </div>
@@ -537,7 +615,6 @@ function groupConversationsByDate(conversations: ConversationSummary[]): Record<
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
   const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-  const lastMonth = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
 
   for (const conv of conversations) {
     const date = new Date(conv.updated_at)
@@ -548,9 +625,7 @@ function groupConversationsByDate(conversations: ConversationSummary[]): Record<
     } else if (date >= yesterday) {
       group = 'Yesterday'
     } else if (date >= lastWeek) {
-      group = 'Previous 7 days'
-    } else if (date >= lastMonth) {
-      group = 'Previous 30 days'
+      group = 'This Week'
     } else {
       group = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     }
