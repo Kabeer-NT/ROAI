@@ -18,7 +18,9 @@ import {
   Trash2,
   Check,
   X,
-  Search
+  Search,
+  Upload,
+  FolderOpen
 } from 'lucide-react'
 import type { SpreadsheetFile } from '../types'
 import type { FileVisibilityState } from '../hooks/useVisibility'
@@ -35,6 +37,8 @@ interface VisibilityStats {
   filesWithHidden: number
   totalHiddenItems: number
 }
+
+type SidebarTab = 'conversations' | 'files'
 
 interface SidebarProps {
   isOpen: boolean
@@ -217,6 +221,41 @@ function ConversationItem({
 }
 
 // ============================================================================
+// Tab Toggle Component
+// ============================================================================
+
+interface TabToggleProps {
+  activeTab: SidebarTab
+  onTabChange: (tab: SidebarTab) => void
+  fileCount: number
+  hasActiveConversation: boolean
+}
+
+function TabToggle({ activeTab, onTabChange, fileCount, hasActiveConversation }: TabToggleProps) {
+  return (
+    <div className="sidebar-tabs">
+      <button 
+        className={`sidebar-tab ${activeTab === 'conversations' ? 'active' : ''}`}
+        onClick={() => onTabChange('conversations')}
+      >
+        <MessageSquare size={14} />
+        <span>Chats</span>
+      </button>
+      <button 
+        className={`sidebar-tab ${activeTab === 'files' ? 'active' : ''}`}
+        onClick={() => onTabChange('files')}
+        disabled={!hasActiveConversation}
+        title={!hasActiveConversation ? 'Select a conversation first' : undefined}
+      >
+        <FolderOpen size={14} />
+        <span>Files</span>
+        {fileCount > 0 && <span className="tab-badge">{fileCount}</span>}
+      </button>
+    </div>
+  )
+}
+
+// ============================================================================
 // Main Sidebar Component
 // ============================================================================
 
@@ -245,9 +284,17 @@ export function Sidebar({
 }: SidebarProps) {
   const { user, logout } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
+  const [activeTab, setActiveTab] = useState<SidebarTab>('conversations')
   
   const isUsingNewSystem = !!getFileVisibility && !!setFileVisibility
   const hasActiveConversation = activeConversationId !== null
+  
+  // Switch to conversations tab when no active conversation
+  useEffect(() => {
+    if (!hasActiveConversation && activeTab === 'files') {
+      setActiveTab('conversations')
+    }
+  }, [hasActiveConversation, activeTab])
   
   // Filter conversations by search
   const filteredConversations = searchQuery.trim()
@@ -316,99 +363,115 @@ export function Sidebar({
             </button>
           </div>
 
-          {/* Search */}
-          {conversations.length > 5 && (
-            <div className="sidebar-section search-section">
-              <div className="search-input-wrapper">
-                <Search size={14} className="search-icon" />
-                <input
-                  type="text"
-                  placeholder="Search conversations..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="search-input"
-                />
-                {searchQuery && (
-                  <button 
-                    className="search-clear"
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Conversations List */}
-          <div className="sidebar-section conversations-section">
-            {isLoadingConversations ? (
-              <div className="conv-loading">
-                <RefreshCw size={16} className="spinning" />
-                <span>Loading...</span>
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="conv-empty">
-                {searchQuery ? (
-                  <>
-                    <Search size={20} className="empty-icon" />
-                    <p>No results for "{searchQuery}"</p>
-                  </>
-                ) : (
-                  <>
-                    <MessageSquare size={20} className="empty-icon" />
-                    <p>No conversations yet</p>
-                    <p className="empty-hint">Start a new conversation</p>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="conv-list">
-                {Object.entries(groupedConversations).map(([group, convs]) => (
-                  <div key={group} className="conv-group">
-                    <div className="conv-group-label">{group}</div>
-                    {convs.map(conv => (
-                      <ConversationItem
-                        key={conv.id}
-                        conversation={conv}
-                        isActive={conv.id === activeConversationId}
-                        onSelect={() => onConversationSelect(conv.id)}
-                        onRename={(title) => onConversationRename(conv.id, title)}
-                        onDelete={() => onConversationDelete(conv.id)}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Tab Toggle */}
+          <div className="sidebar-section tabs-section">
+            <TabToggle 
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              fileCount={files.length}
+              hasActiveConversation={hasActiveConversation}
+            />
           </div>
 
-          {/* Files Section (when in a conversation) */}
-          {hasActiveConversation && onFilesAdd && (
-            <div className="sidebar-section files-section">
-              <div className="section-label">
-                Files
-                {files.length > 0 && <span className="count">{files.length}</span>}
-                {isReloading && (
-                  <RefreshCw size={12} className="reloading-icon spinning" />
+          {/* Conversations Tab */}
+          {activeTab === 'conversations' && (
+            <>
+              {/* Search */}
+              {conversations.length > 5 && (
+                <div className="sidebar-section search-section">
+                  <div className="search-input-wrapper">
+                    <Search size={14} className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Search conversations..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                    {searchQuery && (
+                      <button 
+                        className="search-clear"
+                        onClick={() => setSearchQuery('')}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversations List */}
+              <div className="sidebar-section conversations-section">
+                {isLoadingConversations ? (
+                  <div className="conv-loading">
+                    <RefreshCw size={16} className="spinning" />
+                    <span>Loading...</span>
+                  </div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="conv-empty">
+                    {searchQuery ? (
+                      <>
+                        <Search size={20} className="empty-icon" />
+                        <p>No results for "{searchQuery}"</p>
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare size={20} className="empty-icon" />
+                        <p>No conversations yet</p>
+                        <p className="empty-hint">Start a new conversation</p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="conv-list">
+                    {Object.entries(groupedConversations).map(([group, convs]) => (
+                      <div key={group} className="conv-group">
+                        <div className="conv-group-label">{group}</div>
+                        {convs.map(conv => (
+                          <ConversationItem
+                            key={conv.id}
+                            conversation={conv}
+                            isActive={conv.id === activeConversationId}
+                            onSelect={() => onConversationSelect(conv.id)}
+                            onRename={(title) => onConversationRename(conv.id, title)}
+                            onDelete={() => onConversationDelete(conv.id)}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-              
+            </>
+          )}
+
+          {/* Files Tab */}
+          {activeTab === 'files' && hasActiveConversation && onFilesAdd && (
+            <div className="sidebar-section files-section">
+              {/* Drop Zone */}
               <DropZone 
                 onFilesAdd={onFilesAdd} 
                 onFilePickerOpen={onFilePickerOpen}
                 isUploading={isUploading} 
               />
 
+              {/* Hidden Files Indicator */}
               {visibilityStats && visibilityStats.totalHiddenItems > 0 && (
                 <div className="visibility-indicator">
                   <EyeOff size={14} />
                   <span>{visibilityStats.totalHiddenItems} hidden</span>
                 </div>
               )}
-              
-              {files.length > 0 && (
+
+              {/* Files List */}
+              {files.length > 0 ? (
                 <div className="files-list">
+                  <div className="files-list-header">
+                    <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
+                    {isReloading && (
+                      <RefreshCw size={12} className="reloading-icon spinning" />
+                    )}
+                  </div>
                   {files.map(file => (
                     <FileCard
                       key={file.id}
@@ -421,6 +484,12 @@ export function Sidebar({
                       }
                     />
                   ))}
+                </div>
+              ) : (
+                <div className="files-empty">
+                  <Upload size={24} className="empty-icon" />
+                  <p>No files yet</p>
+                  <p className="empty-hint">Drop files above or click to upload</p>
                 </div>
               )}
             </div>
