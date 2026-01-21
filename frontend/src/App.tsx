@@ -1,12 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks'
-import { AuthPage, ChatPage, ConversationsPage } from './pages'
+import { AuthPage, ChatPage } from './pages'
 
 // Import styles
 import './styles/base.css'
 import './styles/components.css'
 import './styles/features.css'
-// import './styles/conversations.css'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth()
@@ -30,15 +29,15 @@ function AppRoutes() {
       {/* Auth */}
       <Route
         path="/auth"
-        element={user ? <Navigate to="/conversations" replace /> : <AuthPage />}
+        element={user ? <Navigate to="/" replace /> : <AuthPage />}
       />
 
-      {/* Conversations List (Landing Page) */}
+      {/* Chat (main page) */}
       <Route
-        path="/conversations"
+        path="/"
         element={
           <ProtectedRoute>
-            <ConversationsPage />
+            <ChatPage />
           </ProtectedRoute>
         }
       />
@@ -53,11 +52,8 @@ function AppRoutes() {
         }
       />
 
-      {/* Redirect root to conversations */}
-      <Route path="/" element={<Navigate to="/conversations" replace />} />
-
       {/* Catch-all redirect */}
-      <Route path="*" element={<Navigate to="/conversations" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
