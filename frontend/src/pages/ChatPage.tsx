@@ -128,7 +128,10 @@ export function ChatPage() {
   }, [activeConversation])
 
   const messages: Message[] = useMemo(() => {
-    return pendingUserMessage ? [...conversationMessages, pendingUserMessage] : conversationMessages
+    if (pendingUserMessage) {
+      return [...conversationMessages, pendingUserMessage]
+    }
+    return conversationMessages
   }, [conversationMessages, pendingUserMessage])
 
   const files: SpreadsheetFile[] = useMemo(() => {
@@ -221,14 +224,7 @@ export function ChatPage() {
   const sendMessage = useCallback(async (content: string, selContext?: SelectionRange) => {
     if (!content.trim() || isLoading || !token) return
 
-    let convId = activeConversation?.id
-    if (!convId) {
-      const conv = await createConversation(content.slice(0, 50) + (content.length > 50 ? '...' : ''))
-      if (!conv) { addToast('Failed to create conversation', 'error'); return }
-      convId = conv.id
-      await loadConversation(convId)
-    }
-
+    // Show optimistic message IMMEDIATELY - before any async work
     const optimisticUserMessage: Message = {
       id: `pending-${Date.now()}`,
       role: 'user',
@@ -237,6 +233,23 @@ export function ChatPage() {
     }
     setPendingUserMessage(optimisticUserMessage)
     setIsLoading(true)
+
+    let convId = activeConversation?.id
+    let isNewConversation = false
+    
+    if (!convId) {
+      const conv = await createConversation(content.slice(0, 50) + (content.length > 50 ? '...' : ''))
+      if (!conv) { 
+        addToast('Failed to create conversation', 'error')
+        setPendingUserMessage(null)
+        setIsLoading(false)
+        return 
+      }
+      convId = conv.id
+      isNewConversation = true
+      // Don't loadConversation here - it causes message flipping
+      // We'll load it after the chat API call completes
+    }
 
     try {
       const visibility = getAllSerializedVisibility()
@@ -267,14 +280,15 @@ export function ChatPage() {
         body: JSON.stringify(requestBody),
       })
 
-      setPendingUserMessage(null)
+      // Now load the conversation with all messages
       await loadConversation(convId)
       await fetchConversations()
     } catch (error) {
       console.error('Chat error:', error)
       addToast('Failed to send message', 'error')
-      setPendingUserMessage(null)
     } finally {
+      // Always clear pending message in finally
+      setPendingUserMessage(null)
       setIsLoading(false)
       setSelectionContext(null)
     }

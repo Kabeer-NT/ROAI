@@ -221,6 +221,8 @@ async def get_conversation(
             detail="Conversation not found"
         )
     
+    # FIX: Sort by ID instead of created_at for consistent ordering
+    # ID is guaranteed to be in insertion order, timestamps can have collisions
     return ConversationDetail(
         id=conv.id,
         title=conv.title,
@@ -238,7 +240,7 @@ async def get_conversation(
                 selection_context=m.selection_context,
                 created_at=m.created_at
             )
-            for m in sorted(conv.messages, key=lambda x: x.created_at)
+            for m in sorted(conv.messages, key=lambda x: x.id)  # Sort by ID, not created_at
         ],
         files=[
             FileInConversation(
@@ -263,7 +265,7 @@ async def update_conversation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update conversation title or model."""
+    """Update a conversation's title or model."""
     conv = db.query(Conversation).filter(
         Conversation.id == conversation_id,
         Conversation.user_id == current_user.id
@@ -280,6 +282,7 @@ async def update_conversation(
     if data.model is not None:
         conv.model = data.model
     
+    conv.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(conv)
     

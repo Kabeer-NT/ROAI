@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import type { Message, SpreadsheetFile, ToolCall, WebSource, ChatResponse, Followup, SelectionRange } from '../types'
 import { useAuth } from './useAuth'
 
@@ -199,7 +200,12 @@ export function useChat(
       timestamp: new Date(),
     }
 
-    setMessages(prev => [...prev, userMessage])
+    // Use flushSync to ensure user message is rendered to DOM before proceeding
+    // This fixes the race condition where assistant response could appear before user message
+    flushSync(() => {
+      setMessages(prev => [...prev, userMessage])
+    })
+    
     setIsLoading(true)
 
     try {
@@ -318,5 +324,5 @@ export function useChat(
 
   const clearMessages = useCallback(() => setMessages([]), [])
 
-  return { messages, isLoading, sendMessage, addSystemMessage, clearMessages }
+  return { messages, isLoading, sendMessage, addSystemMessage, clearMessages, setMessages }
 }

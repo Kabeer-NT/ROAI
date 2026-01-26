@@ -161,7 +161,6 @@
   padding: 0 20px;
 }
 
-/* Base message styles */
 .message {
   display: flex;
   gap: 14px;
@@ -174,21 +173,18 @@
   margin-bottom: 0;
 }
 
-/* User messages - Right aligned */
 .message.user {
   flex-direction: row-reverse;
   margin-left: auto;
   max-width: 75%;
 }
 
-/* Assistant messages - Left aligned */
 .message.assistant {
   flex-direction: row;
   margin-right: auto;
   max-width: 80%;
 }
 
-/* Avatar */
 .message-avatar {
   width: 28px;
   height: 28px;
@@ -212,39 +208,33 @@
   color: var(--text-secondary);
 }
 
-/* Message body - the bubble */
 .message-body {
   padding: 16px 20px;
   border-radius: 20px;
 }
 
-/* User bubble styling */
 .message.user .message-body {
   background: #1a1a21;
   border: 1px solid #2a2a35;
   border-bottom-right-radius: 6px;
 }
 
-/* Assistant bubble styling - Clean subtle style in dark mode */
 .message.assistant .message-body {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom-left-radius: 6px;
 }
 
-/* Hide the header for cleaner look */
 .message-header {
   display: none;
 }
 
-/* Message content */
 .message-content {
   font-size: 15px;
   line-height: 1.7;
   color: var(--text-primary);
 }
 
-/* Thinking block - Clean subtle style */
 .message.assistant .thinking-block {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -298,12 +288,10 @@
   color: #34d399;
 }
 
-/* Followup chips - subtle style */
 .message.assistant .followup-chips {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* Loading message */
 .message.assistant.loading .message-avatar .spinning {
   color: var(--accent);
 }
@@ -405,7 +393,6 @@
   text-decoration: underline; 
 }
 
-/* Source Links */
 .message-content a.source-link {
   color: #3b82f6;
   text-decoration: underline;
@@ -475,7 +462,7 @@
   gap: 12px;
 }
 
-/* Tool Calls - Cleaner Design */
+/* Tool Calls */
 .tool-call {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -553,7 +540,7 @@
 }
 
 /* ============================================================================
-   View Structure Button (in FileCard)
+   View Structure Button
    ============================================================================ */
 
 .view-structure-btn {
@@ -589,7 +576,6 @@
   transition: color var(--transition-fast);
 }
 
-/* Light theme */
 [data-theme="light"] .view-structure-btn {
   background: #ffffff;
   border-color: #e2e8f0;
@@ -792,6 +778,17 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  flex: 1;
+}
+
+.grid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .grid-instructions {
@@ -807,9 +804,14 @@
 }
 
 .grid-instructions .sheet-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
   padding: 2px 8px;
   background: var(--accent-muted);
   border-radius: 4px;
+  font-size: 12px;
 }
 
 .grid-instructions .sheet-indicator strong {
@@ -879,7 +881,6 @@
   color: #22c55a;
 }
 
-/* Column resize handle */
 .col-resize-handle {
   position: absolute;
   right: 0;
@@ -928,7 +929,6 @@
   color: #22c55a;
 }
 
-/* Row resize handle */
 .row-resize-handle {
   position: absolute;
   left: 0;
@@ -1047,7 +1047,6 @@
   flex-shrink: 0;
 }
 
-/* Resizing state - prevent text selection */
 .structure-grid.resizing {
   user-select: none;
   cursor: col-resize;
@@ -1055,6 +1054,35 @@
 
 .structure-grid.resizing-row {
   cursor: row-resize;
+}
+
+.hidden-count {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.visible-count {
+  color: #22c55a;
+}
+
+.visibility-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.visibility-hint svg {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+[data-theme="dark"] .visibility-hint {
+  background: rgba(99, 102, 241, 0.15);
 }
 
 /* ============================================================================
@@ -1133,7 +1161,6 @@
   color: var(--text-primary);
 }
 
-/* Tabs */
 .structure-tabs {
   display: flex;
   gap: var(--space-1);
@@ -1165,7 +1192,6 @@
   color: var(--accent);
 }
 
-/* Sheet Selector */
 .sheet-selector {
   display: flex;
   gap: var(--space-2);
@@ -1199,84 +1225,10 @@
   color: var(--success);
 }
 
-/* Modal Body */
 .structure-modal-body {
   flex: 1;
   overflow: auto;
   padding: var(--space-5);
-}
-
-/* ============================================================================
-   Structure Viewer - Grid View
-   ============================================================================ */
-
-.grid-view-fullscreen {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.grid-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-}
-
-.grid-instructions {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.grid-instructions .sheet-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-  padding: 2px 8px;
-  background: var(--success-muted);
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.grid-instructions .sheet-indicator strong {
-  color: var(--accent);
-}
-
-/* Counts */
-.hidden-count {
-  color: #ef4444;
-  font-weight: 500;
-}
-
-.visible-count {
-  color: #22c55a;
-}
-
-/* Visibility Hint */
-.visibility-hint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(99, 102, 241, 0.1);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.visibility-hint svg {
-  color: #6366f1;
-  flex-shrink: 0;
-}
-
-[data-theme="dark"] .visibility-hint {
-  background: rgba(99, 102, 241, 0.15);
 }
 
 /* ============================================================================
@@ -1331,7 +1283,6 @@
   color: var(--accent);
 }
 
-/* Summary Stats */
 .summary-stat {
   display: flex;
   align-items: baseline;
@@ -1350,7 +1301,6 @@
   color: var(--text-muted);
 }
 
-/* Cell Type Rows */
 .cell-type-row {
   display: flex;
   align-items: center;
@@ -1377,7 +1327,6 @@
   color: var(--text-primary);
 }
 
-/* Tags */
 .tags-container {
   display: flex;
   flex-wrap: wrap;
@@ -1432,7 +1381,6 @@
   margin-left: 4px;
 }
 
-/* Formulas List */
 .formulas-list {
   display: flex;
   flex-direction: column;
@@ -1490,7 +1438,6 @@
   font-style: italic;
 }
 
-/* Hidden Items in Summary */
 .hidden-item {
   display: flex;
   gap: 8px;
@@ -1509,7 +1456,6 @@
   font-size: 12px;
 }
 
-/* Visibility Items */
 .vis-item {
   display: flex;
   align-items: center;
@@ -1524,50 +1470,6 @@
 }
 
 /* ============================================================================
-   Responsive - Mobile
-   ============================================================================ */
-
-@media (max-width: 768px) {
-  .chat-area { 
-    padding: var(--space-4); 
-  }
-  
-  .input-container { 
-    padding: var(--space-4) var(--space-4) var(--space-6); 
-  }
-  
-  .welcome h1 { 
-    font-size: 26px; 
-  }
-  
-  .messages {
-    padding: 0 8px;
-  }
-  
-  .message {
-    margin-bottom: 24px;
-  }
-  
-  .message.user,
-  .message.assistant {
-    max-width: 90%;
-  }
-  
-  .message-body {
-    padding: 10px 14px;
-  }
-  
-  .message-avatar {
-    width: 24px;
-    height: 24px;
-  }
-  
-  .message-content {
-    font-size: 14px;
-  }
-}
-
-/* ============================================================================
    Light Theme - Chat Bubbles & Thinking
    ============================================================================ */
 
@@ -1576,13 +1478,11 @@
   border-color: #e2e8f0;
 }
 
-/* Assistant bubble - Clean subtle style in light mode */
 [data-theme="light"] .message.assistant .message-body {
   background: #f8fafc;
   border-color: #e2e8f0;
 }
 
-/* Light theme - Thinking block clean subtle style */
 [data-theme="light"] .message.assistant .thinking-block {
   background: #f1f5f9;
   border-color: #e2e8f0;
@@ -1765,8 +1665,7 @@
 }
 
 /* ============================================================================
-   FOLLOWUP CHIPS CSS
-   Styles for follow-up suggestions after AI responses
+   FOLLOWUP CHIPS
    ============================================================================ */
 
 .followup-chips {
@@ -1848,28 +1747,12 @@
   transition: transform var(--transition-fast), color var(--transition-fast);
 }
 
-/* Message-specific followups */
 .message-followups {
   margin-top: var(--space-4);
 }
 
 /* ============================================================================
-   Responsive adjustments for followups
-   ============================================================================ */
-
-@media (max-width: 768px) {
-  .followup-chip {
-    padding: var(--space-2) var(--space-3);
-    font-size: 12px;
-  }
-}
-/* ============================================================================
    WORK MODE STYLES
-   Mode toggle, split layout, workspace panel, and selection action menu
-   ============================================================================ */
-
-/* ============================================================================
-   Mode Toggle Bar
    ============================================================================ */
 
 .mode-toggle-bar {
@@ -1919,17 +1802,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* ============================================================================
-   Content Area Layout
-   ============================================================================ */
-
 .content-area {
   flex: 1;
   display: flex;
   overflow: hidden;
 }
 
-/* Reference mode - chat takes full width */
 .main.reference-mode .content-area {
   flex-direction: column;
 }
@@ -1941,7 +1819,6 @@
   min-height: 0;
 }
 
-/* Work mode - side by side */
 .main.work-mode .content-area {
   flex-direction: row;
 }
@@ -1967,10 +1844,6 @@
   padding: var(--space-4);
 }
 
-/* ============================================================================
-   Workspace Panel Container
-   ============================================================================ */
-
 .workspace-container {
   height: 100%;
   display: flex;
@@ -1986,7 +1859,6 @@
   background: var(--bg-surface);
 }
 
-/* File Selector */
 .file-selector {
   position: relative;
 }
@@ -2075,10 +1947,7 @@
   color: #22c55e;
 }
 
-/* ============================================================================
-   StructureViewer - Inline Mode
-   ============================================================================ */
-
+/* StructureViewer - Inline Mode */
 .structure-viewer-inline {
   flex: 1;
   display: flex;
@@ -2119,10 +1988,7 @@
   color: var(--success);
 }
 
-/* ============================================================================
-   Selection Action Menu (iOS-style floating menu)
-   ============================================================================ */
-
+/* Selection Action Menu */
 .selection-action-menu {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
@@ -2213,33 +2079,11 @@
   color: var(--success);
 }
 
-/* ============================================================================
-   Grid Selection Styles
-   ============================================================================ */
-
+/* Grid Selection Styles */
 .structure-grid.selecting {
   user-select: none;
 }
 
-.structure-grid .grid-cell.in-selection {
-  background: var(--accent-muted) !important;
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-/* Clickable headers */
-.structure-grid .col-header.clickable,
-.structure-grid .row-header.clickable {
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-
-.structure-grid .col-header.clickable:hover,
-.structure-grid .row-header.clickable:hover {
-  background: var(--bg-hover);
-}
-
-/* Selected headers */
 .structure-grid .col-header.selected,
 .structure-grid .row-header.selected {
   background: var(--accent-muted) !important;
@@ -2252,102 +2096,7 @@
   font-weight: 600;
 }
 
-/* ============================================================================
-   Responsive - Mobile (stack vertically)
-   ============================================================================ */
-
-@media (max-width: 900px) {
-  .main.work-mode .content-area {
-    flex-direction: column;
-  }
-  
-  .main.work-mode .workspace-panel {
-    flex: 0 0 50%;
-    min-width: 0;
-    max-height: 50vh;
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-  
-  .main.work-mode .chat-panel {
-    flex: 1;
-    min-width: 0;
-    max-width: none;
-  }
-}
-
-/* ============================================================================
-   Light Theme Overrides
-   ============================================================================ */
-
-[data-theme="light"] .mode-toggle {
-  background: #e2e8f0;
-}
-
-[data-theme="light"] .mode-toggle .mode-btn {
-  color: #64748b;
-}
-
-[data-theme="light"] .mode-toggle .mode-btn:hover:not(.active) {
-  color: #475569;
-}
-
-[data-theme="light"] .mode-toggle .mode-btn.active {
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="light"] .file-selector-btn {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-[data-theme="light"] .file-dropdown {
-  background: white;
-  border-color: #e2e8f0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="light"] .selection-action-menu {
-  background: white;
-  border-color: #e2e8f0;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-}
-
-[data-theme="light"] .action-menu-header {
-  background: #f8fafc;
-  border-color: #e2e8f0;
-}
-
-[data-theme="light"] .action-menu-btn:hover {
-  background: #f1f5f9;
-}
-
-[data-theme="light"] .action-menu-btn.ask-ai:hover {
-  background: rgba(217, 119, 6, 0.1);
-}
-
-[data-theme="light"] .structure-grid .grid-cell.in-selection {
-  background: rgba(217, 119, 6, 0.15) !important;
-  outline-color: #d97706;
-}
-
-[data-theme="light"] .structure-grid .col-header.selected,
-[data-theme="light"] .structure-grid .row-header.selected {
-  background: rgba(217, 119, 6, 0.15) !important;
-  color: #d97706 !important;
-}
-
-[data-theme="light"] .structure-grid .col-header.clickable:hover,
-[data-theme="light"] .structure-grid .row-header.clickable:hover {
-  background: #e2e8f0;
-}
-
-/* ============================================================================
-   Selection Context Chip - Shows selected cells above chat input
-   ============================================================================ */
-
+/* Selection Context Chip */
 .chat-input-wrapper {
   display: flex;
   flex-direction: column;
@@ -2357,7 +2106,6 @@
   margin: 0 auto;
 }
 
-/* The context chip that appears above the input */
 .selection-context-chip {
   display: inline-flex;
   align-items: center;
@@ -2425,16 +2173,12 @@
   color: var(--text-secondary);
 }
 
-/* Chat input adjustments when context is present */
 .chat-input.has-context {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-muted);
 }
 
-/* ============================================================================
-   Chat Input Base Styles (in case not defined elsewhere)
-   ============================================================================ */
-
+/* Chat Input Base Styles */
 .chat-input {
   display: flex;
   align-items: flex-end;
@@ -2508,10 +2252,6 @@
   cursor: not-allowed;
 }
 
-/* ============================================================================
-   Dark Theme Adjustments
-   ============================================================================ */
-
 [data-theme="dark"] .selection-context-chip {
   background: var(--bg-surface);
   border-color: var(--border-subtle);
@@ -2520,10 +2260,6 @@
 [data-theme="dark"] .selection-context-chip .chip-range {
   background: rgba(var(--accent-rgb), 0.15);
 }
-
-/* ============================================================================
-   Work Mode - Narrower input in split view
-   ============================================================================ */
 
 .main.work-mode .chat-input-wrapper {
   max-width: 100%;
@@ -2536,12 +2272,11 @@
 .main.work-mode .selection-context-chip .chip-sheet {
   max-width: 80px;
 }
+
 /* ============================================================================
-   Collapsible Chat Panel - Work Mode
-   Add this to your features.css
+   Collapsible Chat Panel & Panel Divider
    ============================================================================ */
 
-/* Collapsed chat panel - vertical bar on the right */
 .chat-panel-collapsed {
   display: flex;
   flex-direction: column;
@@ -2604,7 +2339,6 @@
   margin-top: auto;
 }
 
-/* Collapse button inside expanded chat panel */
 .chat-collapse-btn {
   position: absolute;
   top: var(--space-3);
@@ -2630,25 +2364,19 @@
   border-color: var(--border-strong);
 }
 
-/* Chat panel needs relative positioning for collapse button */
 .chat-panel {
   position: relative;
 }
 
-/* Workspace panel expands when chat is collapsed */
 .workspace-panel.expanded {
   flex: 1;
 }
 
-/* Smooth transitions */
 .chat-panel,
 .chat-panel-collapsed,
 .workspace-panel {
   transition: width 0.2s ease, flex 0.2s ease;
 }
-/* ============================================================================
-   Resizable Panel Divider - Work Mode
-   ============================================================================ */
 
 .panel-divider {
   position: relative;
@@ -2691,7 +2419,66 @@
   height: 64px;
 }
 
-/* Light Theme */
+/* Light Theme - Work Mode */
+[data-theme="light"] .mode-toggle {
+  background: #e2e8f0;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn {
+  color: #64748b;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn:hover:not(.active) {
+  color: #475569;
+}
+
+[data-theme="light"] .mode-toggle .mode-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .file-selector-btn {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .file-dropdown {
+  background: white;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .selection-action-menu {
+  background: white;
+  border-color: #e2e8f0;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .action-menu-header {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .action-menu-btn:hover {
+  background: #f1f5f9;
+}
+
+[data-theme="light"] .action-menu-btn.ask-ai:hover {
+  background: rgba(217, 119, 6, 0.1);
+}
+
+[data-theme="light"] .structure-grid .grid-cell.in-selection {
+  background: rgba(217, 119, 6, 0.15) !important;
+  outline-color: #d97706;
+}
+
+[data-theme="light"] .structure-grid .col-header.selected,
+[data-theme="light"] .structure-grid .row-header.selected {
+  background: rgba(217, 119, 6, 0.15) !important;
+  color: #d97706 !important;
+}
+
 [data-theme="light"] .panel-divider {
   background: #f1f5f9;
 }
@@ -2713,12 +2500,6 @@
   background: #d97706;
 }
 
-/* Disable resize on mobile */
-@media (max-width: 768px) {
-  .panel-divider {
-    display: none;
-  }
-}
 /* ============================================================================
    Conversations Page
    ============================================================================ */
@@ -2730,7 +2511,6 @@
   flex-direction: column;
 }
 
-/* Header */
 .conversations-header {
   display: flex;
   align-items: center;
@@ -2811,7 +2591,6 @@
   color: var(--error);
 }
 
-/* Main Content */
 .conversations-main {
   flex: 1;
   display: flex;
@@ -2825,7 +2604,6 @@
   max-width: 800px;
 }
 
-/* Title Row */
 .conversations-title-row {
   display: flex;
   align-items: center;
@@ -2863,7 +2641,6 @@
   cursor: not-allowed;
 }
 
-/* Search */
 .conversations-search {
   position: relative;
   margin-bottom: var(--space-6);
@@ -2900,7 +2677,6 @@
   color: var(--text-muted);
 }
 
-/* Loading State */
 .conversations-loading {
   display: flex;
   flex-direction: column;
@@ -2911,7 +2687,6 @@
   gap: var(--space-4);
 }
 
-/* Empty State */
 .conversations-empty {
   display: flex;
   flex-direction: column;
@@ -2959,14 +2734,12 @@
   background: var(--accent-hover);
 }
 
-/* Conversations List */
 .conversations-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
 }
 
-/* Group */
 .conversation-group {
   display: flex;
   flex-direction: column;
@@ -2988,7 +2761,6 @@
   gap: var(--space-2);
 }
 
-/* Conversation Card */
 .conversation-card {
   display: flex;
   align-items: center;
@@ -3083,7 +2855,6 @@
   color: var(--error);
 }
 
-/* Card Edit Mode */
 .card-edit {
   display: flex;
   align-items: center;
@@ -3138,10 +2909,7 @@
   color: var(--error);
 }
 
-/* ============================================================================
-   Sidebar Updates - Back Button & Conversation Title
-   ============================================================================ */
-
+/* Sidebar Updates */
 .back-section {
   padding-bottom: 0 !important;
 }
@@ -3188,10 +2956,6 @@
   padding-bottom: var(--space-3);
 }
 
-/* ============================================================================
-   Loading Screen
-   ============================================================================ */
-
 .loading-screen {
   display: flex;
   flex-direction: column;
@@ -3206,35 +2970,7 @@
   font-size: 0.9375rem;
 }
 
-/* ============================================================================
-   Responsive
-   ============================================================================ */
-
-@media (max-width: 640px) {
-  .conversations-main {
-    padding: var(--space-4);
-  }
-
-  .conversations-title-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-4);
-  }
-
-  .new-conversation-btn {
-    justify-content: center;
-  }
-
-  .card-actions {
-    opacity: 1;
-  }
-}
-/* ============================================================================
-   Sidebar Settings Button Additions
-   Add these to your existing sidebar CSS
-   ============================================================================ */
-
-/* Settings button in user section (expanded sidebar) */
+/* Sidebar Settings Button */
 .user-actions {
   display: flex;
   align-items: center;
@@ -3260,7 +2996,6 @@
   color: var(--text-secondary, #94a3b8);
 }
 
-/* Settings button in rail (collapsed sidebar) */
 .rail-btn.rail-settings {
   color: var(--text-tertiary, #64748b);
 }
@@ -3270,7 +3005,6 @@
   color: var(--accent, #a5b4fc);
 }
 
-/* Light theme */
 [data-theme="light"] .settings-btn-icon:hover {
   background: rgba(0, 0, 0, 0.06);
   color: #475569;
@@ -3280,142 +3014,7 @@
   background: rgba(0, 0, 0, 0.06);
   color: #4f46e5;
 }
-/* ============================================================================
-   SIDEBAR - Ultra Clean Design
-   ============================================================================ */
-
-/* Base */
-.sb {
-  background: var(--sb-bg, #0a0a0b);
-  border-right: 1px solid var(--sb-border, rgba(255, 255, 255, 0.06));
-  display: flex;
-  flex-direction: column;
-  transition: width 0.2s ease;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.sb--open { width: 280px; }
-.sb--closed { width: 56px; }
-
-/* ============================================================================
-   Header
-   ============================================================================ */
-
-.sb-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  min-height: 56px;
-}
-
-.sb-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sb-logo-icon {
-  color: #f59e0b;
-}
-
-.sb-logo-text {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
-.sb-collapse {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color 0.15s;
-}
-
-.sb-collapse:hover {
-  color: #71717a;
-}
-
-/* ============================================================================
-   Collapsed Rail
-   ============================================================================ */
-
-.sb-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-  gap: 4px;
-  flex: 1;
-}
-
-.sb-rail-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.15s;
-}
-
-.sb-rail-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #71717a;
-}
-
-.sb-rail-btn--new {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-}
-
-.sb-rail-btn--new:hover {
-  background: rgba(245, 158, 11, 0.15);
-}
-
-.sb-rail-btn--user {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #0a0a0b;
-  font-weight: 600;
-  font-size: 13px;
-  border-radius: 8px;
-}
-
-.sb-rail-btn--user:hover {
-  opacity: 0.9;
-}
-
-.sb-rail-spacer {
-  flex: 1;
-}
-
-/* ============================================================================
-   Content Area
-   ============================================================================ */
-
-.sb-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.sb-section {
+section {
   padding: 0 12px;
 }
 
@@ -3428,10 +3027,6 @@
   background: rgba(255, 255, 255, 0.06);
   margin: 0 12px;
 }
-
-/* ============================================================================
-   New Conversation Button
-   ============================================================================ */
 
 .sb-new-btn {
   width: 100%;
@@ -3456,17 +3051,13 @@
   background: rgba(245, 158, 11, 0.04);
 }
 
-/* ============================================================================
-   List Area (Chats or Files)
-   ============================================================================ */
-
+/* List Area */
 .sb-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
 }
 
-/* Search */
 .sb-search {
   display: flex;
   align-items: center;
@@ -3513,7 +3104,6 @@
   color: #71717a;
 }
 
-/* Group */
 .sb-group {
   margin-bottom: 4px;
 }
@@ -3527,10 +3117,7 @@
   letter-spacing: 0.02em;
 }
 
-/* ============================================================================
-   Conversation Item
-   ============================================================================ */
-
+/* Conversation Item */
 .sb-item {
   display: flex;
   align-items: center;
@@ -3679,10 +3266,7 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* ============================================================================
-   Context Menu
-   ============================================================================ */
-
+/* Context Menu */
 .sb-menu {
   position: absolute;
   right: 0;
@@ -3723,10 +3307,7 @@
   background: rgba(239, 68, 68, 0.1) !important;
 }
 
-/* ============================================================================
-   Files Card (Inline Dropdown)
-   ============================================================================ */
-
+/* Files Card */
 .sb-files-card {
   margin: 4px 0 8px 16px;
   padding: 8px;
@@ -3748,6 +3329,8 @@
   padding: 8px;
   border-radius: 6px;
   gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
 
 .sb-file:hover {
@@ -3858,10 +3441,7 @@
   color: #f59e0b;
 }
 
-/* ============================================================================
-   Empty States
-   ============================================================================ */
-
+/* Empty States */
 .sb-empty {
   display: flex;
   flex-direction: column;
@@ -3888,10 +3468,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* ============================================================================
-   Footer
-   ============================================================================ */
-
+/* Footer */
 .sb-footer {
   padding: 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
@@ -3955,10 +3532,7 @@
   color: #71717a;
 }
 
-/* ============================================================================
-   Drop Zone Override for Sidebar
-   ============================================================================ */
-
+/* Drop Zone Override for Sidebar */
 .sb-list .drop-zone {
   margin: 4px;
   padding: 10px 12px;
@@ -3991,10 +3565,7 @@
   display: none;
 }
 
-/* ============================================================================
-   Light Theme
-   ============================================================================ */
-
+/* Sidebar Light Theme */
 [data-theme="light"] .sb {
   --sb-bg: #fafafa;
   --sb-border: rgba(0, 0, 0, 0.08);
@@ -4075,889 +3646,10 @@
   background: rgba(0, 0, 0, 0.03);
 }
 
-/* ============================================================================
-   SIDEBAR - Ultra Clean Design
-   ============================================================================ */
-
-/* Base */
-.sb {
-  background: var(--sb-bg, #0a0a0b);
-  border-right: 1px solid var(--sb-border, rgba(255, 255, 255, 0.06));
-  display: flex;
-  flex-direction: column;
-  transition: width 0.2s ease;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.sb--open { width: 280px; }
-.sb--closed { width: 56px; }
-
-/* ============================================================================
-   Header
-   ============================================================================ */
-
-.sb-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px;
-  min-height: 56px;
-}
-
-.sb-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sb-logo-icon {
-  color: #f59e0b;
-}
-
-.sb-logo-text {
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
-}
-
-.sb-collapse {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: color 0.15s;
-}
-
-.sb-collapse:hover {
-  color: #71717a;
-}
-
-/* ============================================================================
-   Collapsed Rail
-   ============================================================================ */
-
-.sb-rail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 0;
-  gap: 4px;
-  flex: 1;
-}
-
-.sb-rail-btn {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.15s;
-}
-
-.sb-rail-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #71717a;
-}
-
-.sb-rail-btn--new {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-}
-
-.sb-rail-btn--new:hover {
-  background: rgba(245, 158, 11, 0.15);
-}
-
-.sb-rail-btn--user {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #0a0a0b;
-  font-weight: 600;
-  font-size: 13px;
-  border-radius: 8px;
-}
-
-.sb-rail-btn--user:hover {
-  opacity: 0.9;
-}
-
-.sb-rail-spacer {
-  flex: 1;
-}
-
-/* ============================================================================
-   Content Area
-   ============================================================================ */
-
-.sb-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.sb-section {
-  padding: 0 12px;
-}
-
-.sb-section--top {
-  padding: 0 12px 12px;
-}
-
-.sb-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.06);
-  margin: 0 12px;
-}
-
-/* ============================================================================
-   New Conversation Button
-   ============================================================================ */
-
-.sb-new-btn {
-  width: 100%;
-  padding: 10px 12px;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #71717a;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.15s;
-}
-
-.sb-new-btn:hover {
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.04);
-}
-
-/* ============================================================================
-   List Area (Chats or Files)
-   ============================================================================ */
-
-.sb-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-/* Search */
-.sb-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  margin: 4px 4px 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
-}
-
-.sb-search-icon {
-  color: #3f3f46;
-  flex-shrink: 0;
-}
-
-.sb-search-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 13px;
-}
-
-.sb-search-input::placeholder {
-  color: #3f3f46;
-}
-
-.sb-search-clear {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.sb-search-clear:hover {
-  color: #71717a;
-}
-
-/* Group */
-.sb-group {
-  margin-bottom: 4px;
-}
-
-.sb-group-label {
-  padding: 12px 8px 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #3f3f46;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-/* ============================================================================
-   Conversation Item
-   ============================================================================ */
-
-.sb-item {
-  display: flex;
-  align-items: center;
-  padding: 9px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-  gap: 10px;
-}
-
-.sb-item:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.sb-item--active {
-  background: rgba(245, 158, 11, 0.08);
-}
-
-.sb-item--active .sb-item-title {
-  color: #f59e0b;
-}
-
-.sb-item--active .sb-item-dot {
-  background: #f59e0b;
-}
-
-.sb-item-dot {
-  width: 6px;
-  height: 6px;
-  background: #27272a;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.sb-item-title {
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sb-item-badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: rgba(245, 158, 11, 0.12);
-  border: none;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: #f59e0b;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s;
-}
-
-.sb-item-badge:hover {
-  background: rgba(245, 158, 11, 0.2);
-}
-
-.sb-item-actions {
-  position: relative;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.sb-item:hover .sb-item-actions {
-  opacity: 1;
-}
-
-.sb-item-menu-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #52525b;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.sb-item-menu-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #71717a;
-}
-
-/* Edit mode */
-.sb-item--editing {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-}
-
-.sb-edit-input {
-  flex: 1;
-  padding: 6px 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-}
-
-.sb-edit-input:focus {
-  border-color: #f59e0b;
-}
-
-.sb-edit-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.sb-edit-btn {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.sb-edit-btn--save {
-  color: #22c55e;
-}
-
-.sb-edit-btn--save:hover {
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.sb-edit-btn--cancel {
-  color: #71717a;
-}
-
-.sb-edit-btn--cancel:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-/* ============================================================================
-   Context Menu
-   ============================================================================ */
-
-.sb-menu {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 100;
-  min-width: 120px;
-  padding: 4px;
-  background: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-}
-
-.sb-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  font-size: 12px;
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.sb-menu button:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.sb-menu-danger {
-  color: #ef4444 !important;
-}
-
-.sb-menu-danger:hover {
-  background: rgba(239, 68, 68, 0.1) !important;
-}
-
-/* ============================================================================
-   Files Card (Inline Dropdown)
-   ============================================================================ */
-
-.sb-files-card {
-  margin: 4px 0 8px 16px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
-  border-left: 2px solid rgba(245, 158, 11, 0.3);
-  transition: all 0.15s;
-}
-
-.sb-files-card--dragging {
-  border-color: rgba(245, 158, 11, 0.5);
-  background: rgba(245, 158, 11, 0.04);
-}
-
-.sb-file {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border-radius: 6px;
-  gap: 10px;
-}
-
-.sb-file:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.sb-file-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.sb-file-icon--xlsx {
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.sb-file-icon--csv {
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.sb-file-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.sb-file-name {
-  font-size: 12px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sb-file-meta {
-  font-size: 10px;
-  color: #3f3f46;
-  margin-top: 1px;
-}
-
-.sb-file-remove {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all 0.15s;
-}
-
-.sb-file:hover .sb-file-remove {
-  opacity: 1;
-}
-
-.sb-file-remove:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.sb-files-empty {
-  padding: 12px 8px;
-  text-align: center;
-  color: #3f3f46;
-  font-size: 11px;
-}
-
-.sb-add-file {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px;
-  margin-top: 4px;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  color: #52525b;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.sb-add-file:hover {
-  border-color: rgba(245, 158, 11, 0.3);
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.04);
-}
-
-.sb-add-file--uploading {
-  pointer-events: none;
-  opacity: 0.7;
-}
-
-.sb-files-reloading {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  color: #f59e0b;
-}
-
-/* ============================================================================
-   File Item - Click to View Structure
-   ============================================================================ */
-
-.sb-file {
-  display: flex;
-  align-items: center;
-  padding: 8px;
-  border-radius: 6px;
-  gap: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.sb-file:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.sb-file-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.sb-file-icon--xlsx {
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.sb-file-icon--csv {
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.sb-file-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.sb-file-name {
-  font-size: 12px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sb-file-meta {
-  font-size: 10px;
-  color: #3f3f46;
-  margin-top: 1px;
-}
-
-.sb-file-remove {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 4px;
-  opacity: 0;
-  transition: all 0.15s;
-}
-
-.sb-file:hover .sb-file-remove {
-  opacity: 1;
-}
-
-.sb-file-remove:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-/* ============================================================================
-   Empty States
-   ============================================================================ */
-
-.sb-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 16px;
-  text-align: center;
-  color: #3f3f46;
-  font-size: 13px;
-  gap: 4px;
-}
-
-.sb-empty-hint {
-  font-size: 11px;
-  opacity: 0.7;
-}
-
-.sb-spinning {
-  animation: sb-spin 1s linear infinite;
-}
-
-@keyframes sb-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* ============================================================================
-   Footer
-   ============================================================================ */
-
-.sb-footer {
-  padding: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-}
-
-.sb-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.sb-user-avatar {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 13px;
-  color: #0a0a0b;
-  flex-shrink: 0;
-}
-
-.sb-user-name {
-  font-size: 13px;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.sb-footer-actions {
-  display: flex;
-  gap: 2px;
-}
-
-.sb-footer-btn {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: #3f3f46;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.15s;
-}
-
-.sb-footer-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #71717a;
-}
-
-/* ============================================================================
-   Drop Zone Override for Sidebar
-   ============================================================================ */
-
-.sb-list .drop-zone {
-  margin: 4px;
-  padding: 10px 12px;
-  border: 1.5px dashed rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  min-height: unset;
-}
-
-.sb-list .drop-zone:hover {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.04);
-}
-
-.sb-list .drop-zone-content {
-  flex-direction: row;
-  gap: 8px;
-}
-
-.sb-list .drop-zone-icon {
-  width: 24px;
-  height: 24px;
-  margin: 0;
-}
-
-.sb-list .drop-zone-hint {
-  font-size: 12px;
-}
-
-.sb-list .drop-zone-note {
-  display: none;
-}
-
-/* ============================================================================
-   Light Theme
-   ============================================================================ */
-
-[data-theme="light"] .sb {
-  --sb-bg: #fafafa;
-  --sb-border: rgba(0, 0, 0, 0.08);
-}
-
-[data-theme="light"] .sb-collapse,
-[data-theme="light"] .sb-rail-btn,
-[data-theme="light"] .sb-group-label,
-[data-theme="light"] .sb-item-dot,
-[data-theme="light"] .sb-search-icon,
-[data-theme="light"] .sb-search-input::placeholder,
-[data-theme="light"] .sb-file-meta,
-[data-theme="light"] .sb-file-remove,
-[data-theme="light"] .sb-files-empty,
-[data-theme="light"] .sb-add-file,
-[data-theme="light"] .sb-empty,
-[data-theme="light"] .sb-footer-btn {
-  color: #a1a1aa;
-}
-
-[data-theme="light"] .sb-collapse:hover,
-[data-theme="light"] .sb-rail-btn:hover,
-[data-theme="light"] .sb-footer-btn:hover {
-  color: #71717a;
-  background: rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="light"] .sb-new-btn {
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #71717a;
-}
-
-[data-theme="light"] .sb-item:hover,
-[data-theme="light"] .sb-file:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-[data-theme="light"] .sb-item--active {
-  background: rgba(245, 158, 11, 0.08);
-}
-
-[data-theme="light"] .sb-search {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="light"] .sb-menu {
-  background: #fff;
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-}
-
-[data-theme="light"] .sb-menu button:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="light"] .sb-files-card {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.06);
-  border-left-color: rgba(245, 158, 11, 0.4);
-}
-
-[data-theme="light"] .sb-add-file {
-  border-color: rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="light"] .sb-add-file:hover {
-  border-color: rgba(245, 158, 11, 0.4);
-  background: rgba(245, 158, 11, 0.04);
-}
-
-[data-theme="light"] .sb-divider,
-[data-theme="light"] .sb-footer {
-  border-color: rgba(0, 0, 0, 0.06);
-}
-
-[data-theme="light"] .sb-edit-input {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-[data-theme="light"] .sb-file:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
 /* ============================================================================
    SETTINGS - Clean Modern Design
    ============================================================================ */
 
-/* Overlay */
 .stg-overlay {
   position: fixed;
   inset: 0;
@@ -4975,7 +3667,6 @@
   to { opacity: 1; }
 }
 
-/* Modal */
 .stg-modal {
   width: 90%;
   max-width: 720px;
@@ -5000,10 +3691,6 @@
     transform: translateY(0) scale(1);
   }
 }
-
-/* ============================================================================
-   Sidebar
-   ============================================================================ */
 
 .stg-sidebar {
   width: 200px;
@@ -5072,10 +3759,6 @@
   color: #3f3f46;
 }
 
-/* ============================================================================
-   Content Area
-   ============================================================================ */
-
 .stg-content {
   flex: 1;
   display: flex;
@@ -5123,10 +3806,6 @@
   padding: 24px;
 }
 
-/* ============================================================================
-   Tab Content
-   ============================================================================ */
-
 .stg-tab {
   display: flex;
   flex-direction: column;
@@ -5164,10 +3843,7 @@
   margin: 2px 0 0;
 }
 
-/* ============================================================================
-   Theme Picker
-   ============================================================================ */
-
+/* Theme Picker */
 .stg-theme-picker {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -5236,10 +3912,7 @@
   color: #f59e0b;
 }
 
-/* ============================================================================
-   Model List
-   ============================================================================ */
-
+/* Model List */
 .stg-model-list {
   display: flex;
   flex-direction: column;
@@ -5380,10 +4053,7 @@
   border-color: rgba(255, 255, 255, 0.25);
 }
 
-/* ============================================================================
-   Account Card
-   ============================================================================ */
-
+/* Account Card */
 .stg-account-card {
   display: flex;
   align-items: center;
@@ -5423,10 +4093,7 @@
   margin-top: 2px;
 }
 
-/* ============================================================================
-   Buttons
-   ============================================================================ */
-
+/* Buttons */
 .stg-btn {
   display: flex;
   align-items: center;
@@ -5458,107 +4125,7 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
-/* ============================================================================
-   Select (if needed for future)
-   ============================================================================ */
-
-.stg-select {
-  position: relative;
-  min-width: 160px;
-}
-
-.stg-select-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.stg-select-trigger:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.stg-select--open .stg-select-trigger {
-  border-color: #f59e0b;
-}
-
-.stg-select-chevron {
-  color: #52525b;
-  transition: transform 0.15s;
-}
-
-.stg-select--open .stg-select-chevron {
-  transform: rotate(180deg);
-}
-
-.stg-select-dropdown {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 10;
-  background: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-.stg-select-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-primary);
-  cursor: pointer;
-  text-align: left;
-}
-
-.stg-select-option:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.stg-select-option--selected {
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.stg-select-option-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.stg-select-option-label {
-  font-weight: 500;
-}
-
-.stg-select-option-desc {
-  font-size: 11px;
-  color: #52525b;
-}
-
-.stg-select-check {
-  color: #f59e0b;
-}
-
-/* ============================================================================
-   Light Theme
-   ============================================================================ */
-
+/* Settings Light Theme */
 [data-theme="light"] .stg-modal {
   --stg-bg: #ffffff;
   border-color: rgba(0, 0, 0, 0.1);
@@ -5631,26 +4198,76 @@
   background: rgba(0, 0, 0, 0.06);
 }
 
-[data-theme="light"] .stg-select-trigger {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.1);
-}
-
-[data-theme="light"] .stg-select-dropdown {
-  background: #fff;
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-[data-theme="light"] .stg-select-option:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
 /* ============================================================================
-   Responsive
+   Responsive - Mobile
    ============================================================================ */
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .chat-area { 
+    padding: var(--space-4); 
+  }
+  
+  .input-container { 
+    padding: var(--space-4) var(--space-4) var(--space-6); 
+  }
+  
+  .welcome h1 { 
+    font-size: 26px; 
+  }
+  
+  .messages {
+    padding: 0 8px;
+  }
+  
+  .message {
+    margin-bottom: 24px;
+  }
+  
+  .message.user,
+  .message.assistant {
+    max-width: 90%;
+  }
+  
+  .message-body {
+    padding: 10px 14px;
+  }
+  
+  .message-avatar {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .message-content {
+    font-size: 14px;
+  }
+  
+  .followup-chip {
+    padding: var(--space-2) var(--space-3);
+    font-size: 12px;
+  }
+  
+  .panel-divider {
+    display: none;
+  }
+  
+  .conversations-main {
+    padding: var(--space-4);
+  }
+
+  .conversations-title-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+
+  .new-conversation-btn {
+    justify-content: center;
+  }
+
+  .card-actions {
+    opacity: 1;
+  }
+  
   .stg-modal {
     width: 95%;
     height: 90%;
@@ -5680,5 +4297,25 @@
 
   .stg-theme-picker {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .main.work-mode .content-area {
+    flex-direction: column;
+  }
+  
+  .main.work-mode .workspace-panel {
+    flex: 0 0 50%;
+    min-width: 0;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  
+  .main.work-mode .chat-panel {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
   }
 }
